@@ -25,7 +25,7 @@ skill-name/
 将 skill 目录复制到你的 Agent 工作区的 `.claude/skills/` 下即可。
 
 ```bash
-git clone https://github.com/hAcKlyc/openmino.git
+git clone https://github.com/DTacheng/openmino.git
 cp -r openmino/.claude/skills/wechat-article-layout-pitfalls /path/to/your-agent/.claude/skills/
 ```
 
@@ -35,4 +35,4 @@ cp -r openmino/.claude/skills/wechat-article-layout-pitfalls /path/to/your-agent
 
 ## License
 
-MIT
+[CC BY-NC 4.0](./LICENSE) — 署名-非商业性使用。商用需获得作者授权。

@@ -3,7 +3,7 @@ name: wechat-article-layout-pitfalls
 description: 微信公众号推文 HTML/SVG 排版避坑速查。当用户要写公众号推文、生成 HTML 排版、嵌入 SVG 插图、或者从已发布文章复用素材时使用——确保 HTML 粘贴进 mp.weixin.qq.com 编辑器后样式不丢、SVG 动画不丢、正文左右对齐、图片能带得过去。覆盖 ProseMirror 编辑器的粘贴白名单、SVG/SMIL 兼容性、base64 图片要求、二次复用陷阱。
 author: 常成（律川 Planet）
 version: "0.1.0"
-license: MIT
+license: CC BY-NC 4.0
 ---
 
 # 微信公众号推文排版避坑
