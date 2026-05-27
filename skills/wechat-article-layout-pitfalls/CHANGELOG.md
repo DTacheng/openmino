@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 0.2.1 (2026-05-28)
+
+**纠正 0.2.0 正文 CSS 方案：`word-break: keep-all` 是错的。**
+
+在 mp.weixin.qq.com 编辑器 Playwright 实测中，对比了 7 组 CSS 组合（justify × keep-all/break-word/normal/inter-character），结论：
+
+- ❌ `word-break: keep-all` 限制中文只在标点/空格处换行 → 每行字数不均 → justify 拉伸短行导致字间距稀疏
+- ✅ `word-break: normal`（CSS 默认）中文按字符自然换行 → 每行字数均匀 → justify 拉伸自然
+- ✅ 英文长词在 `normal` 下同样整词换行，不会被截断
+
+**变更：**
+- SKILL.md 正文段落：`keep-all` → 删掉，改为 `word-break: normal` 或默认
+- html-paste-whitelist.md：重写"正文对齐"章节，新增 keep-all 失效原因说明
+- pre-paste-checklist.md：lint 规则从"缺 keep-all 就 WARN"反转为"有 keep-all 就 WARN"
+
 ## 0.2.0 (2026-05-27)
 
 实战发稿过程沉淀的 4 个新坑，全部来自律川 Planet「钻石型团队」文章的真实粘贴失败。

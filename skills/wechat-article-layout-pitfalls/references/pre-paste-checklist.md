@@ -29,11 +29,11 @@
 
 ## B. 正文
 
-- [ ] **所有正文 `<p>` 都带三件套：`text-align:justify; word-break:keep-all; overflow-wrap:break-word;`**
-  - `text-align:justify` —— 左右对齐
-  - `word-break:keep-all` —— 英文整词换行（关键！否则 Anthropic 会在词内部断）
-  - `overflow-wrap:break-word` —— 兜底超长不可断词
-  - 检查方法：grep `<p style="margin:` 但**不含** `text-align:` 或**不含** `word-break:` 的段落
+- [ ] **所有正文 `<p>` 都带 `text-align:justify`** —— 左右对齐
+  - `word-break` 保持默认 `normal` 即可（中文自然按字符换行、英文按词换行）
+  - 可选 `overflow-wrap:break-word` 兜底防极端超长不可断词
+  - **禁止使用 `word-break:keep-all`** —— 会在 justify 时导致中文字间距稀疏不匀
+  - 检查方法：grep `<p style="margin:` 但**不含** `text-align:justify` 的段落
   - 例外：标题、`<blockquote>`、卡片内 `<p>`、居中小标签
 - [ ] **没有 `position: absolute/fixed`** —— grep `position:\s*(absolute|fixed)`
 - [ ] **没有 `display: flex/grid`** —— grep `display:\s*(flex|grid)`
@@ -107,8 +107,8 @@ def lint_wechat_html(html: str) -> list[str]:
         if 'margin:' in style:  # likely body paragraph
             if 'text-align' not in style:
                 errors.append(f'WARN: <p> 缺少 text-align:justify — {m.group(0)[:60]}')
-            if 'word-break' not in style and 'text-align:justify' in style.replace(' ', ''):
-                errors.append(f'WARN: <p> 有 justify 但缺 word-break:keep-all，英文长词会被截断 — {m.group(0)[:60]}')
+            if 'word-break:keep-all' in style.replace(' ', ''):
+                errors.append(f'WARN: <p> 用了 word-break:keep-all，会在 justify 时导致字间距稀疏 — {m.group(0)[:60]}')
 
     # C. SVG
     if '<svg' in html:

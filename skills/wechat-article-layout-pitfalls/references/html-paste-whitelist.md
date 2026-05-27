@@ -49,8 +49,8 @@
 | `letter-spacing` | ✅ | |
 | `line-height` | ✅ | |
 | `text-align` | ✅ | **正文必须 `justify`**（见正文对齐章节） |
-| `word-break` | ✅ | **正文必须 `keep-all`**——否则 justify 会在英文词内部断词 |
-| `overflow-wrap` | ✅ | 配合 `break-word`，兜底超长不可断词 |
+| `word-break` | ✅ | **正文用默认 `normal` 即可**——`keep-all` 会导致 justify 中文字间距稀疏（0.2.1 纠正） |
+| `overflow-wrap` | ✅ | 可选 `break-word`，兜底超长不可断词 |
 | `display: none` | ✅ | 但慎用，编辑器视觉会乱 |
 | `position: absolute/fixed` | ❌ | 拒收 |
 | `flex` / `grid` 系列 | ❌ | 全部失效 |
@@ -180,38 +180,47 @@
 
 ---
 
-## 正文 `<p>` 必须左右对齐 + 英文整词换行
+## 正文 `<p>` 必须左右对齐
 
-**所有正文段落必须三件套：**
+**所有正文段落只需：**
 1. `text-align:justify` —— 左右对齐
-2. `word-break:keep-all` —— 英文整词换行，不在单词内部断（关键！否则 "Anthropic" 可能变成 "Anth-ropic"）
-3. `overflow-wrap:break-word` —— 兜底，防止超长不可断词撑破容器
+2. `overflow-wrap:break-word`（可选）—— 兜底，防止极端超长不可断词撑破容器
 
 ```html
+<!-- 最简版（推荐）：word-break 默认为 normal，中文自然按字符换行，英文按词换行 -->
+<p style="margin:16px 0; font-size:16px; line-height:1.8;
+          color:#333; text-align:justify;">
+  正文混排 Anthropic、ProseMirror、indemnity……
+</p>
+
+<!-- 显式安全版：多一层 overflow-wrap 兜底 -->
 <p style="margin:16px 0; font-size:16px; line-height:1.8;
           color:#333; text-align:justify;
-          word-break:keep-all; overflow-wrap:break-word;">
+          word-break:normal; overflow-wrap:break-word;">
   正文混排 Anthropic、ProseMirror、indemnity……
 </p>
 ```
 
-**为什么 `text-align:justify` 单独用不够？**
+**为什么不能用 `word-break:keep-all`？**
 
-浏览器的 justify 默认行为：
-- 在 CJK 字符之间和英文词之间都拉开间距实现两端对齐
-- 但当行末空间不够放下整个英文单词时，会**在英文单词内部找断点**换行（启用 hyphens 时甚至加连字符）
-- 结果就是 "Anthropic 把法律放在" 可能渲染成 "Anth-" / "ropic 把法律放在"
+`keep-all` 限制中文只在标点和空格处换行，导致：
+- 每行字数不均匀——有的行 20 个字、有的行 12 个字
+- `text-align:justify` 会把短行强行拉伸到行宽，字间距变得稀疏
+- 视觉上出现"松散行"夹杂在正常行之间，极不美观
 
-加 `word-break:keep-all`：强制英文整词换行，永远不在词内部断。
-加 `overflow-wrap:break-word`：万一遇到超长单词撑破容器，允许在不得已时换行。
+`word-break:normal`（CSS 默认值）：
+- 中文在任意字符间自然换行 → 每行字数均匀 → justify 拉伸自然
+- 英文在单词边界换行 → "Anthropic" 保持完整，不会在词内截断
 
-**例外（不需要三件套的场景）：**
+2026-05-28 Playwright 编辑器实测确认：`keep-all` 的段落比其他方案多 1 行且高度多 20%（586px 宽下 173px vs 144px），说明行被不均匀拉伸。
+
+**例外（不需要 justify 的场景）：**
 - 标题 `<h1>/<h2>`（用 `center` 或 `left`）
 - `<blockquote>` 引用（已有 border-left 视觉锚定）
 - 卡片内的 `<p>`（卡片有自己的紧凑布局）
 - 居中类小标签
 
-**lint 检查方法：** 搜索文档所有 `<p style="margin:` 开头但**不含** `text-align:` 或 **不含** `word-break:` 的段落——前者漏 justify、后者漏防断词。
+**lint 检查方法：** 搜索文档中正文 `<p>` 标签（font-size:16px + color:#333 级别），确保有 `text-align:justify`，同时确认**没有** `word-break:keep-all`。
 
 ---
 

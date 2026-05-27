@@ -2,13 +2,13 @@
 name: wechat-article-layout-pitfalls
 description: 微信公众号推文 HTML/SVG 排版避坑速查。当用户要写公众号推文、生成 HTML 排版、嵌入 SVG 插图、或者从已发布文章复用素材时使用——确保 HTML 粘贴进 mp.weixin.qq.com 编辑器后样式不丢、SVG 动画不丢、正文左右对齐、图片能带得过去。覆盖 ProseMirror 编辑器的粘贴白名单、SVG/SMIL 兼容性、base64 图片要求、二次复用陷阱。
 author: 常成（律川 Planet）
-version: "0.2.0"
+version: "0.2.1"
 license: CC BY-NC 4.0
 ---
 
 # 微信公众号推文排版避坑
 
-公众号编辑器（mp.weixin.qq.com 的 ProseMirror）对粘贴的 HTML 不是任意接受的，但坑分布与多数人想象的相反——它**比想象的宽容**（连 SVG + SMIL 动画都收），但**特定标签和 CSS 会被静默丢弃**、**HTML 属性会被忽略**、**嵌套 table 的尺寸会被强行重排**。这个 skill 是 2026-05-26 首次完整实测、2026-05-27 律川 Planet 实战发稿过程沉淀的避坑清单。
+公众号编辑器（mp.weixin.qq.com 的 ProseMirror）对粘贴的 HTML 不是任意接受的，但坑分布与多数人想象的相反——它**比想象的宽容**（连 SVG + SMIL 动画都收），但**特定标签和 CSS 会被静默丢弃**、**HTML 属性会被忽略**、**嵌套 table 的尺寸会被强行重排**。这个 skill 是 2026-05-26 首次完整实测、2026-05-27 律川 Planet 实战发稿过程沉淀、2026-05-28 Playwright 编辑器实测纠正 keep-all 的避坑清单。
 
 ## 何时启用
 
@@ -47,8 +47,10 @@ license: CC BY-NC 4.0
 
 ### 2. 正文段落
 - ✅ 正文 `<p>` 必须包含 `text-align: justify` —— 默认左对齐右侧参差不齐，中英文混排尤其丑
-- ✅ **配套必加 `word-break: keep-all; overflow-wrap: break-word;`** —— justify 单独用，英文长单词（Anthropic、ProseMirror、indemnity）会在单词内部被拆开换行，中英混排极丑。`keep-all` 强制英文整词换行；`overflow-wrap:break-word` 兜底防超长不可断词撑破容器
-- 完整组合：`<p style="margin:...; text-align:justify; word-break:keep-all; overflow-wrap:break-word;">`
+- ❌ **不要加 `word-break: keep-all`** —— 这是之前 0.2.0 版本的致命错误。`keep-all` 限制中文只在标点/空格处换行，导致 justify 时短行被过度拉伸，字间距稀疏不匀，效果很差（2026-05-28 Playwright 编辑器实测确认）
+- ✅ **`word-break: normal`（CSS 默认值）就够用**——中文按字符自然换行，英文整词在空格处换行，英文长单词不会被截断
+- ✅ 可选加 `overflow-wrap: break-word` 兜底——防极端超长不可断词（如 URL）撑破容器
+- 推荐组合：`<p style="margin:...; text-align:justify;">`（最简，word-break 默认为 normal 即可）或 `<p style="margin:...; text-align:justify; word-break:normal; overflow-wrap:break-word;">`（显式安全版）
 - 不适用于：标题、`<blockquote>`、卡片内 `<p>`、居中类小标签
 
 ### 3. SVG 插图（关键 — 多数人这里想错了）
