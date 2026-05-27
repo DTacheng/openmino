@@ -9,14 +9,31 @@
 - [ ] **没有 `<div>` 标签** —— grep `<div`，应该 0 命中
   - 例外：HTML 文档外壳的 `<html>/<body>` 可以有，但正文区不要
   - 替换方案：所有视觉容器改用 `<table><tr><td style="...">`
+- [ ] **没有 `<figure>` 标签** —— grep `<figure`，应该 0 命中
+  - figure 与 div 同命运，会被降级丢样式
+  - 图片包装也用 `<table><tr><td>`
 - [ ] **没有 `<style>` 块** —— grep `<style`，应该 0 命中
   - 所有 CSS 必须内联到 `style="..."` 属性
 - [ ] **没有 class 选择器** —— grep `class="`，应该全部是 0 命中或全部能被替换为内联 style
+- [ ] **每个 `<table>` 的 style 都包含 `border:0;`** —— HTML 属性 `border="0"` 不被编辑器认，必须 inline
+  - 检查方法：grep `<table[^>]*style="(?!.*border:0)` 应该 0 命中
+  - 推荐组合：`style="border:0;border-collapse:separate;background:transparent;..."`
+- [ ] **每个 `<td>` 的 style 都包含 `border:0;`**（带视觉边界的 td 后面再写 `border-left:Npx solid X;` 同属性后写胜出）
+  - 检查方法：grep `<td[^>]*style="(?!.*border:0)` 应该 0 命中
+- [ ] **嵌套 `<table>` 不要用百分比宽度做几何对比** —— `<table width="X%">` 在嵌套场景被强制拉成 100%
+  - 检查方法：grep `<td[^>]*>\s*<table[^>]*width="[0-9]+%"` 看是否有几何对比意图
+  - 替换方案：改用 SVG（viewBox 坐标不会被编辑器重排）
+- [ ] **`<body>` 没设 `background:#XXX`** —— body 底色不均匀生效，渲染会"花"
+  - 检查方法：grep `<body[^>]*style="[^"]*background`
+  - 替换方案：body 保持默认白底，需要色块就在具体 td 上画
 
 ## B. 正文
 
-- [ ] **所有正文 `<p>` 都带 `text-align:justify`**
-  - 检查方法：grep `<p style="margin:` 但**不含** `text-align:` 的段落
+- [ ] **所有正文 `<p>` 都带三件套：`text-align:justify; word-break:keep-all; overflow-wrap:break-word;`**
+  - `text-align:justify` —— 左右对齐
+  - `word-break:keep-all` —— 英文整词换行（关键！否则 Anthropic 会在词内部断）
+  - `overflow-wrap:break-word` —— 兜底超长不可断词
+  - 检查方法：grep `<p style="margin:` 但**不含** `text-align:` 或**不含** `word-break:` 的段落
   - 例外：标题、`<blockquote>`、卡片内 `<p>`、居中小标签
 - [ ] **没有 `position: absolute/fixed`** —— grep `position:\s*(absolute|fixed)`
 - [ ] **没有 `display: flex/grid`** —— grep `display:\s*(flex|grid)`
@@ -40,7 +57,12 @@
 ## D. 图片
 
 - [ ] **所有 `<img src>` 都是 `data:image/...;base64,...`** —— grep `src="(?!data:)`，应该 0 命中
-- [ ] **每张图 base64 编码前 ≤200KB** —— 编码后会膨胀到 ~270KB
+- [ ] **`<img>` 上没有 `box-shadow`** —— 复合 css 可能让整个 img 被丢
+  - 检查方法：grep `<img[^>]*box-shadow`
+  - img 的 style 保持干净：display / width / height / border / margin 就够了
+- [ ] **每张图 base64 ≤135KB（实测安全线）** —— 对应原图 ~100KB JPEG
+  - >150KB base64 在粘贴时常被静默吃掉
+  - 大图先用 PIL/Sharp 缩到 800px 宽再编码
 - [ ] **整篇 HTML 体积 ≤5MB** —— 否则编辑器粘贴会卡甚至崩
 - [ ] **每张 `<img>` 都有 alt** —— accessibility 友好
 
@@ -60,15 +82,33 @@ def lint_wechat_html(html: str) -> list[str]:
     # A. 容器层
     if re.search(r'<div\b', html):
         errors.append('FATAL: 含 <div> 标签，会被降级为 <p> 丢失样式')
+    if re.search(r'<figure\b', html):
+        errors.append('FATAL: 含 <figure> 标签，同 <div> 命运')
     if re.search(r'<style\b', html):
         errors.append('FATAL: 含 <style> 块，公众号会整段丢弃')
     if re.search(r'var\(--', html):
         errors.append('FATAL: 含 CSS 变量 var(--...)，编辑器解析不了')
+    if re.search(r'<body[^>]*style="[^"]*background', html):
+        errors.append('FATAL: <body> 设了 background，会在编辑器里不均匀生效')
+    # tables / tds without border:0 in inline style
+    for m in re.finditer(r'<table\b[^>]*style="([^"]*)"', html):
+        if 'border:0' not in m.group(1) and 'border:none' not in m.group(1):
+            errors.append(f'FATAL: <table> 缺少 inline border:0，编辑器会自加灰边 — {m.group(0)[:80]}')
+    for m in re.finditer(r'<td\b[^>]*style="([^"]*)"', html):
+        if 'border:0' not in m.group(1) and 'border:none' not in m.group(1):
+            errors.append(f'FATAL: <td> 缺少 inline border:0 — {m.group(0)[:80]}')
+    # nested table with percentage width (geometric diagram red flag)
+    for m in re.finditer(r'<td\b[^>]*>\s*<table[^>]*width="[0-9]+%"', html):
+        errors.append(f'WARN: 嵌套 <table width="X%"> 会被编辑器强制等宽，几何对比图请改 SVG — {m.group(0)[:80]}')
 
     # B. 正文
     for m in re.finditer(r'<p\s+style="([^"]+)"', html):
-        if 'text-align' not in m.group(1) and 'margin:' in m.group(1):
-            errors.append(f'WARN: <p> 缺少 text-align:justify — {m.group(0)[:60]}')
+        style = m.group(1)
+        if 'margin:' in style:  # likely body paragraph
+            if 'text-align' not in style:
+                errors.append(f'WARN: <p> 缺少 text-align:justify — {m.group(0)[:60]}')
+            if 'word-break' not in style and 'text-align:justify' in style.replace(' ', ''):
+                errors.append(f'WARN: <p> 有 justify 但缺 word-break:keep-all，英文长词会被截断 — {m.group(0)[:60]}')
 
     # C. SVG
     if '<svg' in html:
@@ -85,6 +125,12 @@ def lint_wechat_html(html: str) -> list[str]:
     for m in re.finditer(r'<img[^>]+src="([^"]+)"', html):
         if not m.group(1).startswith('data:'):
             errors.append(f'FATAL: <img> src 不是 base64 — {m.group(1)[:50]}')
+    if re.search(r'<img[^>]*box-shadow', html):
+        errors.append('FATAL: <img> 上有 box-shadow，可能让 img 被吃掉')
+    # base64 image >135KB
+    for m in re.finditer(r'<img[^>]+src="data:image/[^;]+;base64,([^"]+)"', html):
+        if len(m.group(1)) > 135 * 1024:
+            errors.append(f'WARN: <img> base64 >{135}KB，可能粘不进编辑器（实测安全线）')
 
     return errors
 ```

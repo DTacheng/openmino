@@ -22,6 +22,7 @@
 | `<hr>` | ✅ | |
 | `<section>` | ⚠️ | 部分场景被保留为视觉块容器 |
 | **`<div>`** | ❌❌ | **会被整体降级为 `<p>`，所有内联样式连带丢失** |
+| **`<figure>`** | ❌❌ | **同 `<div>` 命运**——图片包装用 `<table><tr><td>` |
 | `<style>` | ❌ | 整段丢弃，所有 class/CSS 变量都失效 |
 | `<script>` | ❌ | 拒收，没有意外 |
 | `<iframe>` | ❌ | 拒收 |
@@ -48,6 +49,8 @@
 | `letter-spacing` | ✅ | |
 | `line-height` | ✅ | |
 | `text-align` | ✅ | **正文必须 `justify`**（见正文对齐章节） |
+| `word-break` | ✅ | **正文必须 `keep-all`**——否则 justify 会在英文词内部断词 |
+| `overflow-wrap` | ✅ | 配合 `break-word`，兜底超长不可断词 |
 | `display: none` | ✅ | 但慎用，编辑器视觉会乱 |
 | `position: absolute/fixed` | ❌ | 拒收 |
 | `flex` / `grid` 系列 | ❌ | 全部失效 |
@@ -57,13 +60,87 @@
 
 ---
 
+---
+
+## HTML 属性陷阱（实测）
+
+公众号 ProseMirror 编辑器**只认 inline CSS、不认大部分 HTML 属性**。最容易踩的几个：
+
+### `border="0"` 属性无效
+
+```html
+<!-- ❌ 编辑器忽略 border 属性，仍然给 table 自加 1px 灰边 -->
+<table cellpadding="0" cellspacing="0" border="0">
+
+<!-- ✅ 必须 inline 进 style -->
+<table cellpadding="0" cellspacing="0" border="0"
+       style="border:0;border-collapse:separate;background:transparent;">
+  <tr>
+    <td style="border:0;...">...</td>
+  </tr>
+</table>
+```
+
+每个 `<td>` 的 inline style 也必须前置 `border:0;`。带视觉竖线的 td 后面再写 `border-left:Npx solid X;`——同属性后写胜出，灰边被压制、装饰边保留。
+
+### `width="X%"` 在嵌套 `<table>` 上被强制拉成 100%
+
+```html
+<!-- ❌ 想做"金字塔"，3 条不同宽度的色条 —— 编辑器把 inner table 拉成全宽，3 条变等宽 -->
+<table width="100%">
+  <tr><td align="center">
+    <table width="30%"><tr><td style="background:#000;">专家 10%</td></tr></table>
+  </td></tr>
+  <tr><td align="center">
+    <table width="58%"><tr><td style="background:#666;">骨干 20%</td></tr></table>
+  </td></tr>
+</table>
+
+<!-- ✅ 几何对比图改用 SVG，viewBox 坐标编辑器碰不到 -->
+<svg viewBox="0 0 800 240" role="img" width="100%">
+  <rect x="150" y="0" width="100" height="48" rx="4" fill="#000"/>
+  <text x="200" y="30" text-anchor="middle" font-size="24" fill="#fff">专家 10%</text>
+  <rect x="110" y="56" width="180" height="48" rx="4" fill="#666"/>
+  <text x="200" y="86" text-anchor="middle" font-size="24" fill="#fff">骨干 20%</text>
+</svg>
+```
+
+**规律：什么时候用嵌套 table、什么时候用 SVG**
+- 视觉容器、卡片、引用块、按钮 → **嵌套 table（百分比宽度被吃掉无所谓）**
+- 几何对比、金字塔、对比柱、流程图、关系图 → **SVG**
+
+### `<body style="background:#XXX">` 不均匀生效
+
+```html
+<!-- ❌ body 底色在编辑器里"花"——部分元素吸到、部分没吸到 -->
+<body style="background:#FAF7F2;">
+  <p>段落 A 显示出米色底</p>
+  <p>段落 B 还是白底</p>
+  <table>...</table>  <!-- 这一段又是米色 -->
+</body>
+
+<!-- ✅ body 保持默认白底，需要色块就在具体 td 上画 -->
+<body>
+  ...
+  <table>
+    <tr>
+      <td style="background:#FAF7F2;padding:24px;">
+        需要米色底的内容写在这里
+      </td>
+    </tr>
+  </table>
+</body>
+```
+
+---
+
 ## 标准排版套路（已验证可复用）
 
 ### 卡片容器
 ```html
-<table style="width:100%; border-collapse:collapse; margin:24px 0;">
+<table style="width:100%; border:0; border-collapse:separate; background:transparent; margin:24px 0;">
   <tr>
-    <td style="background:#F5F5F5; border-radius:12px;
+    <td style="border:0; background:#F5F5F5; border-radius:12px;
                border-left:6px solid #3B82F6; padding:24px;">
       <p style="margin:0; font-size:16px; color:#333; text-align:justify;">
         卡片正文……
@@ -103,24 +180,38 @@
 
 ---
 
-## 正文 `<p>` 必须左右对齐
+## 正文 `<p>` 必须左右对齐 + 英文整词换行
 
-**所有正文段落必须包含 `text-align:justify`**，否则中英文混排+长段落会右侧参差不齐，视觉很丑。
+**所有正文段落必须三件套：**
+1. `text-align:justify` —— 左右对齐
+2. `word-break:keep-all` —— 英文整词换行，不在单词内部断（关键！否则 "Anthropic" 可能变成 "Anth-ropic"）
+3. `overflow-wrap:break-word` —— 兜底，防止超长不可断词撑破容器
 
 ```html
 <p style="margin:16px 0; font-size:16px; line-height:1.8;
-          color:#333; text-align:justify;">
-  正文……
+          color:#333; text-align:justify;
+          word-break:keep-all; overflow-wrap:break-word;">
+  正文混排 Anthropic、ProseMirror、indemnity……
 </p>
 ```
 
-不适用于：
+**为什么 `text-align:justify` 单独用不够？**
+
+浏览器的 justify 默认行为：
+- 在 CJK 字符之间和英文词之间都拉开间距实现两端对齐
+- 但当行末空间不够放下整个英文单词时，会**在英文单词内部找断点**换行（启用 hyphens 时甚至加连字符）
+- 结果就是 "Anthropic 把法律放在" 可能渲染成 "Anth-" / "ropic 把法律放在"
+
+加 `word-break:keep-all`：强制英文整词换行，永远不在词内部断。
+加 `overflow-wrap:break-word`：万一遇到超长单词撑破容器，允许在不得已时换行。
+
+**例外（不需要三件套的场景）：**
 - 标题 `<h1>/<h2>`（用 `center` 或 `left`）
 - `<blockquote>` 引用（已有 border-left 视觉锚定）
 - 卡片内的 `<p>`（卡片有自己的紧凑布局）
 - 居中类小标签
 
-**lint 检查方法：** 搜索文档所有 `<p style="margin:` 开头但**不含** `text-align:` 的段落——多数是漏掉 justify 的正文段。
+**lint 检查方法：** 搜索文档所有 `<p style="margin:` 开头但**不含** `text-align:` 或 **不含** `word-break:` 的段落——前者漏 justify、后者漏防断词。
 
 ---
 
@@ -134,9 +225,18 @@
 <!-- ❌ 失效 -->
 <img src="./local.png">
 <img src="https://example.com/img.png">
+
+<!-- ❌ img 上加 box-shadow 可能让整个 img 被丢 -->
+<img src="data:image/png;base64,..." style="box-shadow:0 8px 24px rgba(0,0,0,0.2);"/>
+
+<!-- ✅ img 的 style 保持干净 -->
+<img src="data:image/png;base64,..."
+     style="display:block; width:100%; height:auto; margin:16px auto; border:0;" alt="..."/>
 ```
 
 **配套约束：**
-- 单图编码前压到 200KB 以内（base64 后会变 ~270KB）
+- **base64 实测安全线：≤135KB**（对应原图 ~100KB JPEG）—— >150KB base64 在粘贴时常被静默吃掉
+- 大图先用 PIL/Sharp 缩到 800px 宽再编码，肉眼差异极小但 base64 减半
 - 整篇 HTML 体积控制在 5MB 以内，否则编辑器粘贴会卡甚至崩
 - 多图场景可以分段粘贴（每次粘 1-2 张）
+- 不要在 `<img>` 上加 `box-shadow`、`filter`、`transform` 等复合 CSS，保持 style 干净（display/width/height/border/margin 就够了）
