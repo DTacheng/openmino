@@ -1,0 +1,2 @@
+# MyAgents auto-mounted symlinks (ignore, they get recreated each session)
+.claude/
