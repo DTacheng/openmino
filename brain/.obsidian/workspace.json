@@ -1,0 +1,226 @@
+{
+  "main": {
+    "id": "82335841073f5b89",
+    "type": "split",
+    "children": [
+      {
+        "id": "c794bef1f231a72b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "0eed89a968bc86a5",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "concepts/元典开放平台.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "元典开放平台"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "eb4b85de3fd2e5ef",
+    "type": "split",
+    "children": [
+      {
+        "id": "db4d560e823dabdd",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "620485508f04e32d",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "7667add6e586963b",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "ef6b002b83cce395",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "a0407dacb83c0d48",
+    "type": "split",
+    "children": [
+      {
+        "id": "52914058b986898b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4d99d0d694dfd9f4",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "sources/idc-legal-tech-2025.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "idc-legal-tech-2025 的反向链接列表"
+            }
+          },
+          {
+            "id": "fb6b4a53149d6591",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "sources/idc-legal-tech-2025.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "idc-legal-tech-2025 的出链列表"
+            }
+          },
+          {
+            "id": "40f177042b491d0b",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "deaf6283d4b5cf97",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "36d8100f629e1d75",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "concepts/元典开放平台.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "元典开放平台 的大纲"
+            }
+          },
+          {
+            "id": "5908ed040a7613f9",
+            "type": "leaf",
+            "state": {
+              "type": "xiaopi-chat",
+              "state": {},
+              "icon": "message-circle",
+              "title": "小皮 Brain Editor"
+            }
+          }
+        ],
+        "currentTab": 5
+      }
+    ],
+    "direction": "horizontal",
+    "width": 506.5
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "xiaopi-brain-editor:打开小皮 Brain Editor": false,
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "5908ed040a7613f9",
+  "lastOpenFiles": [
+    "decisions/产品定位决策.md",
+    "_index.md",
+    "sources/yuandian-open-platform.md",
+    "sources/thomson-reuters-lawyer-productivity.md",
+    "sources/tencent-workbuddy-release.md",
+    "sources/precedence-research-ai-agent-market.md",
+    "sources/openclaw-36kr-stars.md",
+    "sources/miit-openclaw-security-warning.md",
+    "sources/meta-summer-yue-email-incident.md",
+    "sources/idc-legal-tech-2025.md",
+    "sources/harvey-ai-funding-growth.md",
+    "sources/gartner-agentic-ai-forecast.md",
+    "sources/ERROR_CORRECTION_REPORT.md",
+    "sources/a16z-ai-market-expansion.md",
+    "resources/archives/素材内容.md",
+    "resources/archives/企业介绍.md",
+    "resources/archives/历史客户项目.md",
+    "insights/API安全调用规范.md",
+    "insights/演讲模板.md",
+    "insights/培训受众画像.md",
+    "insights/法律行业AI采用现状.md",
+    "insights/安全与合规风险.md",
+    "decisions/知行架构原则.md",
+    "concepts/openclaw.md",
+    "concepts/智能体架构.md",
+    "concepts/法律元力产品.md"
+  ]
+}
