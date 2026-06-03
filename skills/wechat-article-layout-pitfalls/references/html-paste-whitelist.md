@@ -48,7 +48,11 @@
 | `font-family` | ✅ | 但手机上字体回退依赖系统 |
 | `letter-spacing` | ✅ | |
 | `line-height` | ✅ | |
+| `letter-spacing` | ✅ | 标题/标签微调字距可用 |
+| `vertical-align` | ✅ | `<td>` / inline-block 元素对齐用 |
+| `display: inline-block` | ✅ | 徽章、tag 标签可用（圆形序号、关键词标签） |
 | `text-align` | ✅ | **正文必须 `justify`**（见正文对齐章节） |
+| `width: 100%`（CSS） | ❌ | **被算成 720px 画布固定像素，手机端塌成细条**——满宽改用 HTML 属性 `width="100%"`（见 HTML 属性陷阱） |
 | `word-break` | ✅ | **正文用默认 `normal` 即可**——`keep-all` 会导致 justify 中文字间距稀疏（0.2.1 纠正） |
 | `overflow-wrap` | ✅ | 可选 `break-word`，兜底超长不可断词 |
 | `display: none` | ✅ | 但慎用，编辑器视觉会乱 |
@@ -57,6 +61,7 @@
 | `transform` | ⚠️ | 在 `<table>/<td>` 上不可靠 |
 | CSS 变量 `var(--xxx)` | ❌ | 整个 var() 解析失败值会丢 |
 | class 选择器 | ❌ | `<style>` 块被丢，class 也就没了 |
+| `::before` / `::after` 伪元素 | ❌ | 依赖 `<style>` 定义，`<style>` 被丢则伪元素必丢——用 inline-block span 替代 |
 
 ---
 
@@ -132,15 +137,72 @@
 </body>
 ```
 
+### `width` 用 HTML 属性，不要用 CSS `width:100%`
+
+电脑上看着没问题，手机上每张卡片被挤成一条细条。根因：编辑器把 CSS `width:100%` 算成它自己 720px 画布下的固定像素（720/680/634px 之类），再把这些固定像素硬塞到手机上，于是嵌套挤压。
+
+```html
+<!-- ❌ CSS 百分比宽度，手机端塌缩 -->
+<table style="width:100%;background:#f0f9ff;">
+
+<!-- ✅ HTML 属性宽度会被保留，浏览器按相对宽度渲染 -->
+<table width="100%" style="background:#f0f9ff;">
+```
+
+`max-width:520px` 这种兜上限的可以留在 CSS；`width="100%"` 走 HTML 属性兜下限。`<td>` 的列宽同理用 `width="X%"` 属性，不写 CSS。
+
+### 有底色的卡片用 `bgcolor` 属性 + inline 双保险
+
+即使全部内联 `style="background-color:..."`，长块、带 `border-left` 的左色条卡片仍可能被编辑器剥掉底色。稳妥做法是 HTML 属性 `bgcolor` 和 inline `background-color` **各写一遍**，`<table>` 和每个 `<td>` 都要双写。
+
+```html
+<!-- ❌ 只靠 section/inline background，长块会被剥成白底 -->
+<section style="background-color:#f0f9ff;border-left:4px solid #0284c7;padding:16px 20px;">
+  正文……
+</section>
+
+<!-- ✅ table bgcolor + td bgcolor 双保险，左色条用窄 td 实现 -->
+<section style="padding:0 24px;margin:20px 0;">
+<table bgcolor="#f0f9ff" width="100%" style="border:0;border-collapse:separate;background-color:#f0f9ff;border-radius:6px;">
+  <tr>
+    <td bgcolor="#0284c7" width="4" style="border:0;background-color:#0284c7;width:4px;font-size:0;line-height:1;">&nbsp;</td>
+    <td bgcolor="#f0f9ff" style="border:0;background-color:#f0f9ff;padding:16px 20px;">正文……</td>
+  </tr>
+</table>
+</section>
+```
+
+- 外层 `<section>` 只负责左右 `padding:0 24px`（与正文对齐），不放底色
+- 左侧色条用一个窄 `<td bgcolor width="4">` 实现，替代 `border-left`
+- 文字 `<td>` 也要重复 `bgcolor=` 和 `background-color:`，否则个别端还是会灰掉
+- **底色等于页面底色的自由段落（开篇/结尾）则反过来——不写 bgcolor、也不套 table**，否则同色 table 会被编辑器描出一圈框。口诀：**要不要框 = 要不要 bgcolor**
+
+### 进度条/评分条让 `<td>` 自己当色块
+
+内层 `<div style="background-color">` 的背景会被剥掉，看起来就是空格子。改让 `<td>` 自己成色，且空 `<td>` 在手机端会塌——必须填 `&nbsp;` 并 `font-size:0` 压住高度。
+
+```html
+<!-- ❌ 内层 div 背景被剥，剩空格子 -->
+<td><div style="width:100%;height:10px;background:#0284c7;"></div></td>
+
+<!-- ✅ 色块画在 td 上，&nbsp; + font-size:0 防塌 -->
+<td bgcolor="#0284c7" width="19%" style="border:0;background-color:#0284c7;height:14px;line-height:14px;font-size:0;padding:0;border-radius:2px;">&nbsp;</td>
+```
+
+- 宽度用 `width="19%"` HTML 属性，不要 CSS `width:19%`（嵌套 `<td>` 里 CSS 百分比不稳）
+- 段落间空隙用 `<td bgcolor="#ffffff" width="5">&nbsp;</td>` 插入
+
 ---
 
 ## 标准排版套路（已验证可复用）
 
 ### 卡片容器
+外层 `<section padding:0 24px>` 与正文对齐；满宽用 `width="100%"` 属性；底色卡片 `bgcolor` 双写。
 ```html
-<table style="width:100%; border:0; border-collapse:separate; background:transparent; margin:24px 0;">
+<section style="padding:0 24px; margin:24px 0;">
+<table width="100%" bgcolor="#F5F5F5" style="border:0; border-collapse:separate; background-color:#F5F5F5; border-radius:12px;">
   <tr>
-    <td style="border:0; background:#F5F5F5; border-radius:12px;
+    <td bgcolor="#F5F5F5" style="border:0; background-color:#F5F5F5; border-radius:12px;
                border-left:6px solid #3B82F6; padding:24px;">
       <p style="margin:0; font-size:16px; color:#333; text-align:justify;">
         卡片正文……
@@ -148,14 +210,29 @@
     </td>
   </tr>
 </table>
+</section>
 ```
 
 ### 分割线
 ```html
-<table style="width:100%;">
-  <tr><td style="height:1px; background:#E5E5E5;"></td></tr>
+<table width="100%" style="border:0;">
+  <tr><td style="border:0; height:1px; background:#E5E5E5; font-size:0; line-height:1;">&nbsp;</td></tr>
 </table>
 ```
+
+### 列表（每条独立 `<p>`，不用 `<br/><br/>`）
+在一个 `<td>` 里用 `<br/><br/>` 分隔 bullet，WeChat 会把 `<td>` 开头的第一段单独套 `<p>`，导致第一条标号掉行错位。改为每条独立 `<p>`。
+```html
+<section style="padding:0 24px; margin:0 0 22px;">
+<table width="100%" bgcolor="#f7fafc" style="border:0; background-color:#f7fafc; border-radius:6px;">
+  <tr><td bgcolor="#f7fafc" style="border:0; background-color:#f7fafc; padding:14px 18px;">
+    <p style="margin:0 0 12px 0; font-size:15px; color:#3f3f3f; line-height:1.9; text-align:justify;"><span style="color:#0284c7; font-weight:bold;">•</span>&nbsp;&nbsp;<strong>第一条</strong>：……</p>
+    <p style="margin:0; font-size:15px; color:#3f3f3f; line-height:1.9; text-align:justify;"><span style="color:#0284c7; font-weight:bold;">•</span>&nbsp;&nbsp;<strong>第二条</strong>：……</p>
+  </td></tr>
+</table>
+</section>
+```
+（标准 `<ul><li>` 也能用；上面这套是需要控底色/控间距时的稳妥写法。前面条目 `margin:0 0 12px 0`、末条 `margin:0`。）
 
 ### 品牌按钮（伪按钮）
 ```html

@@ -19,10 +19,11 @@
   这是正文段落。所有正文必须带 text-align:justify，否则中英文混排右侧参差不齐。
 </p>
 
-<!-- 卡片容器 -->
-<table style="width:100%; border-collapse:collapse; margin:24px 0;">
+<!-- 卡片容器：外层 section padding:0 24px 对齐正文；width="100%" 属性；底色 bgcolor 双写 -->
+<section style="padding:0 24px; margin:24px 0;">
+<table width="100%" bgcolor="#F5F5F5" style="border:0; border-collapse:separate; background-color:#F5F5F5; border-radius:12px;">
   <tr>
-    <td style="background:#F5F5F5; border-radius:12px;
+    <td bgcolor="#F5F5F5" style="border:0; background-color:#F5F5F5; border-radius:12px;
                border-left:6px solid #3B82F6; padding:24px;">
       <p style="margin:0; font-size:16px; color:#333; text-align:justify;">
         这是卡片内容。用 table>tr>td 做容器（不用 div）。
@@ -30,10 +31,11 @@
     </td>
   </tr>
 </table>
+</section>
 
 <!-- 分割线 -->
-<table style="width:100%;">
-  <tr><td style="height:1px; background:#E5E5E5;"></td></tr>
+<table width="100%" style="border:0;">
+  <tr><td style="border:0; height:1px; background:#E5E5E5; font-size:0; line-height:1;">&nbsp;</td></tr>
 </table>
 
 <!-- 行内高亮 -->
@@ -46,7 +48,7 @@
 </p>
 
 <!-- 图片（base64） -->
-<!-- 单图编码前压到 200KB 以内 -->
+<!-- 单图编码后 ≤135KB（实测安全线），大图先缩到 800px 宽 -->
 <!-- <img src="data:image/png;base64,..."
      style="display:block; width:100%; margin:16px auto;" alt="图片说明"/> -->
 

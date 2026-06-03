@@ -6,7 +6,7 @@
 
 | Skill | 用途 | 版本 |
 |---|---|---|
-| [wechat-article-layout-pitfalls](./skills/wechat-article-layout-pitfalls/) | 公众号推文 HTML/SVG 排版避坑速查 | 0.1.0 |
+| [wechat-article-layout-pitfalls](./skills/wechat-article-layout-pitfalls/) | 公众号推文 HTML/SVG 排版避坑速查 | 0.4.0 |
 
 ## 安装
 

@@ -26,6 +26,15 @@
 - [ ] **`<body>` 没设 `background:#XXX`** —— body 底色不均匀生效，渲染会"花"
   - 检查方法：grep `<body[^>]*style="[^"]*background`
   - 替换方案：body 保持默认白底，需要色块就在具体 td 上画
+- [ ] **没有 CSS `width:100%`** —— 手机端会被算成固定像素塌成细条，满宽改用 HTML 属性 `width="100%"`
+  - 检查方法：grep `style="[^"]*width:\s*100%` 应该 0 命中（`max-width` 不算）
+- [ ] **有底色的卡片用 `bgcolor` 属性 + inline 双写** —— `<section background-color>` 长块会被剥底色
+  - 检查方法：带 `background-color` 的 `<table>/<td>` 应同时有 `bgcolor=` 属性
+  - 反向：底色等于页面底色的自由段落**不要**套 table（口诀：要不要框 = 要不要 bgcolor）
+- [ ] **进度条/色块没有内层 `<div background>`，空 `<td>` 都填了 `&nbsp;`+`font-size:0`** —— 否则色块被剥、空 td 手机端塌
+- [ ] **卡片外层 `<section>` 都是 `padding:0 24px`** —— 与正文对齐，否则卡片贴边、正文内缩
+  - 例外：full-bleed 品牌色条、通铺 hero/footer
+- [ ] **没有 `::before` / `::after`** —— grep `::before|::after` 应该 0 命中（依赖 `<style>`，必丢）
 
 ## B. 正文
 
@@ -35,6 +44,9 @@
   - **禁止使用 `word-break:keep-all`** —— 会在 justify 时导致中文字间距稀疏不匀
   - 检查方法：grep `<p style="margin:` 但**不含** `text-align:justify` 的段落
   - 例外：标题、`<blockquote>`、卡片内 `<p>`、居中小标签
+- [ ] **列表没有在单 `<td>` 里用 `<br/><br/>` 分隔 bullet** —— WeChat 会把首段单独套 `<p>`，导致第一条标号掉行错位
+  - 检查方法：grep 列表型 `<td>` 内是否出现 `<br/><br/>` / `<br><br>`
+  - 替换方案：每条 bullet 用独立 `<p>`（前面 `margin:0 0 12px 0`、末条 `margin:0`）
 - [ ] **没有 `position: absolute/fixed`** —— grep `position:\s*(absolute|fixed)`
 - [ ] **没有 `display: flex/grid`** —— grep `display:\s*(flex|grid)`
 - [ ] **没有 CSS 变量** —— grep `var\(--`，全部要展开成实际值
@@ -90,6 +102,17 @@ def lint_wechat_html(html: str) -> list[str]:
         errors.append('FATAL: 含 CSS 变量 var(--...)，编辑器解析不了')
     if re.search(r'<body[^>]*style="[^"]*background', html):
         errors.append('FATAL: <body> 设了 background，会在编辑器里不均匀生效')
+    if re.search(r'::before|::after', html):
+        errors.append('FATAL: 含 ::before/::after 伪元素，依赖 <style> 必丢——改用 inline-block span')
+    # CSS width:100% squishes on mobile — use HTML attribute width="100%"
+    for m in re.finditer(r'style="([^"]*\bwidth:\s*100%[^"]*)"', html):
+        if 'max-width' not in m.group(1):
+            errors.append(f'WARN: CSS width:100% 手机端会塌成细条，改用 HTML 属性 width="100%" — {m.group(0)[:60]}')
+    # colored card with background-color but missing bgcolor attribute
+    for m in re.finditer(r'<(table|td)\b([^>]*)>', html):
+        attrs = m.group(2)
+        if 'background-color' in attrs and 'bgcolor' not in attrs:
+            errors.append(f'WARN: <{m.group(1)}> 有 background-color 但缺 bgcolor 属性，长块底色可能被剥 — {m.group(0)[:60]}')
     # tables / tds without border:0 in inline style
     for m in re.finditer(r'<table\b[^>]*style="([^"]*)"', html):
         if 'border:0' not in m.group(1) and 'border:none' not in m.group(1):

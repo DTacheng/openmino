@@ -1,14 +1,14 @@
 ---
 name: wechat-article-layout-pitfalls
-description: 微信公众号推文 HTML/SVG 排版避坑速查。当用户要写公众号推文、生成 HTML 排版、嵌入 SVG 插图、或者从已发布文章复用素材时使用——确保 HTML 粘贴进 mp.weixin.qq.com 编辑器后样式不丢、SVG 动画不丢、正文左右对齐、图片能带得过去。覆盖 ProseMirror 编辑器的粘贴白名单、SVG/SMIL 兼容性、base64 图片要求、二次复用陷阱。
+description: 微信公众号推文 HTML/SVG 排版避坑速查 + 草稿箱一键上传。当用户要写公众号推文、生成 HTML 排版、嵌入 SVG 插图、从已发布文章复用素材、或想通过 API 一键上传到公众号草稿箱时使用——确保 HTML 粘贴进 mp.weixin.qq.com 编辑器后样式不丢、SVG 动画不丢、正文左右对齐、图片能带得过去。覆盖 ProseMirror 编辑器的粘贴白名单、SVG/SMIL 兼容性、base64 图片要求、二次复用陷阱、以及 draft/add 草稿接口的配置与账号门槛。
 author: 常成（律川 Planet）
-version: "0.2.1"
+version: "0.4.0"
 license: CC BY-NC 4.0
 ---
 
 # 微信公众号推文排版避坑
 
-公众号编辑器（mp.weixin.qq.com 的 ProseMirror）对粘贴的 HTML 不是任意接受的，但坑分布与多数人想象的相反——它**比想象的宽容**（连 SVG + SMIL 动画都收），但**特定标签和 CSS 会被静默丢弃**、**HTML 属性会被忽略**、**嵌套 table 的尺寸会被强行重排**。这个 skill 是 2026-05-26 首次完整实测、2026-05-27 律川 Planet 实战发稿过程沉淀、2026-05-28 Playwright 编辑器实测纠正 keep-all 的避坑清单。
+公众号编辑器（mp.weixin.qq.com 的 ProseMirror）对粘贴的 HTML 不是任意接受的，但坑分布与多数人想象的相反——它**比想象的宽容**（连 SVG + SMIL 动画都收），但**特定标签和 CSS 会被静默丢弃**、**HTML 属性会被忽略**、**嵌套 table 的尺寸会被强行重排**。这个 skill 是 2026-05-26 首次完整实测、2026-05-27 律川 Planet 实战发稿过程沉淀、2026-05-28 Playwright 编辑器实测纠正 keep-all、2026-06 回填法律元力 / Lawvable / MyAgents 系列 13 篇早期实战 HTML 层踩坑的避坑清单。
 
 ## 何时启用
 
@@ -16,20 +16,31 @@ license: CC BY-NC 4.0
 写完之后 → 按清单核对一遍再交付。
 用户报"粘贴进编辑器样式丢了 / SVG 没动画 / 图片显示不出来" → 直接对照 references/ 排查。
 
-## 公众号写作的标准流程
+## 公众号写作的两条工作流（按账号类型选）
 
-公众号订阅号目前**没有可用的 API 发布路径**，唯一可靠的工作流是：
+### A. 手动粘贴（任何账号都能用，主线）
 
-1. **本地写 HTML** —— 严格按白名单标签和内联 CSS（见 `references/html-paste-whitelist.md`）
+1. **本地写 HTML** —— 严格按白名单标签和内联 CSS（见 `references/html-paste-whitelist.md`），图片走 **base64**
 2. **打开 mp.weixin.qq.com 编辑器** —— 新建文章
 3. **Ctrl+V 直接粘贴整段 HTML** —— ProseMirror 会做白名单过滤
 4. **保存草稿后再预览** —— 编辑器内的视觉不等于手机端的视觉
 5. **必要时用 Playwright 自动化辅助测试** —— 不是为了自动发布，是为了快速验证一段 HTML 在编辑器里的渲染结果
 
+### B. 草稿箱 API 一键上传（个人/未认证号通常也能用，免手动粘贴）
+
+`draft/add` 接口可以把 HTML 直接推进后台草稿箱。**关于账号权限（2026-06 核实，别再写死"只有认证号能用"）：**
+
+- **创建草稿（draft/add）个人/未认证订阅号实测可行**——这正是 135 / 壹伴等第三方工具能把文章同步进个人号草稿箱的原因；它们走的就是这条接口。
+- **2025-07 回收的是 API 自动"群发/发布"（freepublish）能力**——即"直接推送给粉丝"那一步，对个人主体/未认证号关闭。**创建草稿不等于发布**，两者是分开的。
+- 官方口径不统一：少数个人号**直连** `draft/add` 会遇到 `48001 api unauthorized`，而开发者平台又显示有权限——属于平台侧不一致。遇到 48001 的解法：① 在后台「设置与开发→开发→接口权限」确认草稿/素材权限项；② 改走第三方平台授权（`authorizer_access_token`）路径（第三方工具就是这么绕过去的）；③ 后台「反馈」申诉。
+- **无论哪种账号，最后"发布/群发给粉丝"都得人工在手机端【公众号助手】点**——API 不替个人号自动群发。本 skill 的脚本也只做到草稿箱为止。
+
+**关键差异：草稿 API 的正文图片不能用 base64**（会被过滤），必须先把每张图传到微信图床换成 mmbiz URL。需要一台能跑脚本、公网出口 IP 可加进后台 IP 白名单的机器。完整配置和接口链路见 `references/draft-api-upload.md`，配套脚本 `scripts/upload_to_draft.py`（一条命令完成取 token → 换图 → 传封面 → 进草稿箱）。
+
 不要尝试这些路径，会浪费时间：
-- 公众号草稿 API（仅服务号/认证订阅号可用，律川 Planet 走不通）
-- 秀米 / 壹伴 / 135 编辑器同步（对 `<table>` 自定义结构和复杂 SVG 支持反而更差）
+- 秀米 / 壹伴 / 135 编辑器同步（做排版可以，但对 `<table>` 自定义结构和复杂 SVG 支持反而更差；它们的"同步到草稿箱"本质就是帮你调 draft/add）
 - Markdown 直接导入（公众号当前没有官方 Markdown 入口；ProseMirror 没有源码模式）
+- 指望用 API 自动**群发**给粉丝（个人/未认证号这一步被关，得手动点）
 
 ## 四类避坑速查
 
@@ -44,6 +55,12 @@ license: CC BY-NC 4.0
 - ❌ `<body style="background:#XXX">` 不会均匀生效——部分元素吸到底色、部分没吸到，渲染会"花"。保持 body 默认白底，需要色块就在具体 td 上画
 - ❌ CSS 变量 (`var(--brand)`) 和 class 选择器全部无效
 - ✅ 所有样式必须**内联**写在 `style="..."` 里
+- ❌ **不要用 CSS `width:100%`**——编辑器把它算成 720px 画布下的固定像素，塞到手机上每张卡片被挤成细条。满宽一律走 HTML 属性 `width="100%"`（`max-width:520px` 这种兜上限的可以留在 CSS）
+- ❌ **`<section style="background-color:...">` 在长块/左色条卡片上会被剥底色**——所有"有底色的卡片"用 `<table bgcolor="X" style="background-color:X">` + 每个 `<td bgcolor="X">` 双保险（HTML 属性 + inline 各写一遍）
+- ✅ **要不要框子 = 要不要 bgcolor**：底色等于页面底色的自由段落（开篇/结尾）只用 `<section>` + `<p>`，**不要套 `<table>`**（同色 table 也会被编辑器描出一圈框）
+- ✅ **卡片外层 `<section>` 统一 `padding:0 24px`**，与正文段落同一套水平缩进对齐；唯二例外是 full-bleed 的品牌色条和通铺的 hero/footer
+- ❌ **进度条/评分条不要用内层 `<div style="background-color">`**（背景被剥成空格子）——让 `<td bgcolor>` 自己当色块，且必须填 `&nbsp;` + `font-size:0`（空 `<td>` 在手机端会塌掉），宽度用 `width="X%"` 属性
+- ❌ **不用 `::before` / `::after` 等伪元素**（依赖 `<style>`，必丢）——圆形序号徽章用 `<span style="display:inline-block;width:32px;height:32px;line-height:32px;text-align:center;border-radius:50%;">`，装饰引号用 `&ldquo;` + 定位 span 替代
 
 ### 2. 正文段落
 - ✅ 正文 `<p>` 必须包含 `text-align: justify` —— 默认左对齐右侧参差不齐，中英文混排尤其丑
@@ -52,6 +69,8 @@ license: CC BY-NC 4.0
 - ✅ 可选加 `overflow-wrap: break-word` 兜底——防极端超长不可断词（如 URL）撑破容器
 - 推荐组合：`<p style="margin:...; text-align:justify;">`（最简，word-break 默认为 normal 即可）或 `<p style="margin:...; text-align:justify; word-break:normal; overflow-wrap:break-word;">`（显式安全版）
 - 不适用于：标题、`<blockquote>`、卡片内 `<p>`、居中类小标签
+- ❌ **列表不要在一个 `<td>` 里用 `<br/><br/>` 分隔多条 bullet**——WeChat 会把 `<td>` 开头的第一段 inline 内容单独套一层 `<p>`，导致**第一条**的标号被换行、和后面的条目错位
+- ✅ **每条 bullet 用独立的 `<p>` 承载**（前面的条目 `margin:0 0 12px 0`、最后一条 `margin:0`），每条都是独立 block，WeChat 无从下手
 
 ### 3. SVG 插图（关键 — 多数人这里想错了）
 - ✅ **公众号编辑器接受直接粘贴 SVG**，包括 SMIL `<animate>` / `<animateTransform>` 动画
@@ -80,6 +99,8 @@ license: CC BY-NC 4.0
 - `references/svg-pitfalls.md` —— SVG 在公众号的渲染约束（吸收杨卫薪律师 `svg-article-illustrator` 的避坑规则，MIT 协议）
 - `references/pre-paste-checklist.md` —— 粘贴前 lint 清单
 - `references/reuse-and-copy.md` —— 从已发布文章复用素材的陷阱与替代方案
+- `references/draft-api-upload.md` —— 一键上传草稿箱（draft API）的配置、接口链路、账号门槛、base64 不可用的坑
+- `scripts/upload_to_draft.py` —— 草稿箱一键上传脚本（认证账号用）
 
 ## 关联 Skill
 
@@ -88,4 +109,4 @@ license: CC BY-NC 4.0
 
 ## 致谢
 
-SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。
+SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。0.3.0 回填的 HTML 层细节坑（CSS width 手机端塌缩 / bgcolor 双保险 / 进度条 td 色块 / 同色段落不套 table / 卡片与正文对齐 / 列表独立 p / 伪元素禁用）来自 2026-04 法律元力 / Lawvable / MyAgents 系列 13 篇推文的早期实战沉淀。
