@@ -1,2 +1,10 @@
 # MyAgents auto-mounted symlinks (ignore, they get recreated each session)
 .claude/
+
+# 凭据 / token 缓存（脚本运行时生成，禁止入库）
+*.token_cache.json
+.wx_token_cache.json
+
+# Python 缓存
+__pycache__/
+*.pyc
