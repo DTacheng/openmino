@@ -20,7 +20,7 @@
 | `<br>` | ✅ | |
 | `<ul>` `<ol>` `<li>` | ✅ | 列表正常 |
 | `<hr>` | ✅ | |
-| `<section>` | ⚠️ | 部分场景被保留为视觉块容器 |
+| `<section>` | ✅ | 安全保留为视觉块容器；带 `background-color`/`linear-gradient`/`border-image`/`box-shadow` 均不剥（2026-08-14 双层实测） |
 | **`<div>`** | ❌❌ | **会被整体降级为 `<p>`，所有内联样式连带丢失** |
 | **`<figure>`** | ❌❌ | **同 `<div>` 命运**——图片包装用 `<table><tr><td>` |
 | `<style>` | ❌ | 整段丢弃，所有 class/CSS 变量都失效 |
@@ -40,6 +40,7 @@
 | `color` | ✅ | 文字颜色 |
 | `background` / `background-color` | ✅ | 含 `linear-gradient()`（**注意：CSS 渐变可以，但 SVG 渐变不行**） |
 | `border` / `border-left` / `border-right` / `border-top` / `border-bottom` | ✅ | 全部保留 |
+| `border-image` | ✅ | 渐变竖条 `border-image:linear-gradient(...) 1` 保留（2026-08-14 双层实测新增）；注意 `border-image` 会覆盖 `border-color`，手机端 WebView 渲染需截图确认 |
 | `border-radius` | ✅ | 圆角 |
 | `padding` / `padding-*` | ✅ | |
 | `margin` / `margin-*` | ✅ | |
@@ -55,6 +56,8 @@
 | `width: 100%`（CSS） | ❌ | **被算成 720px 画布固定像素，手机端塌成细条**——满宽改用 HTML 属性 `width="100%"`（见 HTML 属性陷阱） |
 | `word-break` | ✅ | **正文用默认 `normal` 即可**——`keep-all` 会导致 justify 中文字间距稀疏（0.2.1 纠正） |
 | `overflow-wrap` | ✅ | 可选 `break-word`，兜底超长不可断词 |
+| `box-shadow` | ✅ | **在 `<section>` 上保留**（双层阴影 `0 6px 18px ..., 0 0 8px ...` 均保留，2026-08-14 双层实测）；但 **`box-shadow: inset` 剥离**，且 `<img>` 上加 box-shadow 可能让 img 被丢——保持 img 干净 |
+| `linear-gradient`（作 `<section>` 的 background） | ✅ | `<section style="background:linear-gradient(...)">` 粘贴+服务端两层全保留（2026-08-14 实测）；行内 `<span>/<strong>` 的 background 渐变同样保留。注：这是 HTML 层的 CSS 渐变，与 SVG 渐变（被禁）不是一回事 |
 | `display: none` | ✅ | 但慎用，编辑器视觉会乱 |
 | `position: absolute/fixed` | ❌ | 拒收 |
 | `flex` / `grid` 系列 | ❌ | 全部失效 |
@@ -151,31 +154,29 @@
 
 `max-width:520px` 这种兜上限的可以留在 CSS；`width="100%"` 走 HTML 属性兜下限。`<td>` 的列宽同理用 `width="X%"` 属性，不写 CSS。
 
-### 有底色的卡片用 `bgcolor` 属性 + inline 双保险
+### 有底色的卡片：`<section>` 直接带底色即可（2026-08-14 双层实测作废旧结论）
 
-即使全部内联 `style="background-color:..."`，长块、带 `border-left` 的左色条卡片仍可能被编辑器剥掉底色。稳妥做法是 HTML 属性 `bgcolor` 和 inline `background-color` **各写一遍**，`<table>` 和每个 `<td>` 都要双写。
+> ⚠️ 本小节的旧结论已作废。旧版声称"`<section background-color>` 长块/左色条会被剥底色、必须用 `<table bgcolor>` 双保险"，经 2026-08-14 律川 Planet 账号真机双层实测（粘贴归一化层 + 服务端保存回读层）**均未复现**：`<section>` 上的纯色、`linear-gradient` 背景、`border-left` 竖条、`border-image` 渐变竖条、`box-shadow` 双层阴影**全部保留**。`<section>` 是安全的带底色/竖条容器。
+
+保留的语倒是：**白色/同色自由段落（开篇/结尾）不要套 table**——所以"有底色卡片"直接写 `<section>`，底色等于页底的自由段落也写裸 `<section>`，两者都不需要 `<table bgcolor>` 包装了。口诀改成：**同色不套 table，要底色直接上 section**。
 
 ```html
-<!-- ❌ 只靠 section/inline background，长块会被剥成白底 -->
-<section style="background-color:#f0f9ff;border-left:4px solid #0284c7;padding:16px 20px;">
-  正文……
+<!-- ✅ 有底色的卡片：直接 section 带底色（渐变色也可以），不再需要 table bgcolor 双保险 -->
+<section style="margin:0 8px 20px; background:linear-gradient(180deg,#fff 0%,#f4f8fc 100%); border:1px solid rgba(8,87,165,0.08); border-radius:14px; padding:18px 16px; box-shadow:0 6px 18px rgba(58,65,80,0.06), 0 0 8px rgba(8,87,165,0.1);">
+  卡片内容……
 </section>
 
-<!-- ✅ table bgcolor + td bgcolor 双保险，左色条用窄 td 实现 -->
-<section style="padding:0 24px;margin:20px 0;">
-<table bgcolor="#f0f9ff" width="100%" style="border:0;border-collapse:separate;background-color:#f0f9ff;border-radius:6px;">
-  <tr>
-    <td bgcolor="#0284c7" width="4" style="border:0;background-color:#0284c7;width:4px;font-size:0;line-height:1;">&nbsp;</td>
-    <td bgcolor="#f0f9ff" style="border:0;background-color:#f0f9ff;padding:16px 20px;">正文……</td>
-  </tr>
-</table>
+<!-- ✅ 带左竖条的卡片：section + border-left 直接画（渐变竖条可再叠 border-image） -->
+<section style="margin:0 8px 20px; background:linear-gradient(135deg,#fff 0%,#fff 65%,#E8F0F8 100%); border-left:5px solid; border-image:linear-gradient(to bottom,#0857A5,#7ab8e0) 1; border-radius:0 10px 10px 0; padding:14px 16px;">
+  卡片正文……
 </section>
+
+<!-- ✅ 色块/进度条这类需要"精确几何"的，仍可让 <td> 自己当色块（见下一小节） -->
 ```
 
-- 外层 `<section>` 只负责左右 `padding:0 24px`（与正文对齐），不放底色
-- 左侧色条用一个窄 `<td bgcolor width="4">` 实现，替代 `border-left`
-- 文字 `<td>` 也要重复 `bgcolor=` 和 `background-color:`，否则个别端还是会灰掉
-- **底色等于页面底色的自由段落（开篇/结尾）则反过来——不写 bgcolor、也不套 table**，否则同色 table 会被编辑器描出一圈框。口诀：**要不要框 = 要不要 bgcolor**
+- 外层与正文本应用同一套水平缩进——见下方"卡片与正文对齐"：卡片/正文外层 `<section>` 统一 `padding:0 8px`（2026-08-14 起由 24px 改 8px）
+- `<table bgcolor>` 双保险写法**仍可用**（对特定旧编辑器/其他账号是保底手段），只是不再必要；追求"官微视觉风格"的渐变卡片/左渐变条/阴影卡片，直接看 `wechat-visual-style` 组件库
+- 手机端 WebView 对 `border-image` 渐变的渲染支持需截图确认（粘贴层/服务端层不剥，但视觉渲染属另一层）
 
 ### 进度条/评分条让 `<td>` 自己当色块
 
@@ -197,19 +198,18 @@
 ## 标准排版套路（已验证可复用）
 
 ### 卡片容器
-外层 `<section padding:0 24px>` 与正文对齐；满宽用 `width="100%"` 属性；底色卡片 `bgcolor` 双写。
+外层 `<section padding:0 8px>` 与正文对齐；卡片底色/竖条/渐变直接写 `<section>`（2026-08-14 实测确认无需 table bgcolor 双保险）。
 ```html
-<section style="padding:0 24px; margin:24px 0;">
-<table width="100%" bgcolor="#F5F5F5" style="border:0; border-collapse:separate; background-color:#F5F5F5; border-radius:12px;">
-  <tr>
-    <td bgcolor="#F5F5F5" style="border:0; background-color:#F5F5F5; border-radius:12px;
-               border-left:6px solid #3B82F6; padding:24px;">
-      <p style="margin:0; font-size:16px; color:#333; text-align:justify;">
-        卡片正文……
-      </p>
-    </td>
-  </tr>
-</table>
+<!-- 纯色底卡片 -->
+<section style="margin:24px 8px; background-color:#F5F5F5; border-radius:12px; border-left:6px solid #3B82F6; padding:24px;">
+  <p style="margin:0; font-size:16px; color:#333; text-align:justify;">
+    卡片正文……
+  </p>
+</section>
+
+<!-- 渐变+阴影卡片（官微视觉风格，见 wechat-visual-style 组件库） -->
+<section style="margin:24px 8px; background:linear-gradient(180deg,#fff 0%,#f4f8fc 100%); border:1px solid rgba(8,87,165,0.08); border-radius:14px; padding:18px 16px; box-shadow:0 6px 18px rgba(58,65,80,0.06), 0 0 8px rgba(8,87,165,0.1);">
+  卡片内容……
 </section>
 ```
 
@@ -223,7 +223,7 @@
 ### 列表（每条独立 `<p>`，不用 `<br/><br/>`）
 在一个 `<td>` 里用 `<br/><br/>` 分隔 bullet，WeChat 会把 `<td>` 开头的第一段单独套 `<p>`，导致第一条标号掉行错位。改为每条独立 `<p>`。
 ```html
-<section style="padding:0 24px; margin:0 0 22px;">
+<section style="padding:0 8px; margin:0 0 22px;">
 <table width="100%" bgcolor="#f7fafc" style="border:0; background-color:#f7fafc; border-radius:6px;">
   <tr><td bgcolor="#f7fafc" style="border:0; background-color:#f7fafc; padding:14px 18px;">
     <p style="margin:0 0 12px 0; font-size:15px; color:#3f3f3f; line-height:1.9; text-align:justify;"><span style="color:#0284c7; font-weight:bold;">•</span>&nbsp;&nbsp;<strong>第一条</strong>：……</p>
