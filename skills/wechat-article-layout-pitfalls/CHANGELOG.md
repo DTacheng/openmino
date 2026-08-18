@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 0.6.0 (2026-08-14)
+
+**作废"`<section>` 会剥底色/左竖条"旧结论 + 补齐渐变/阴影/border-image 白名单 + 新增官微视觉组件库 skill。**
+
+此前 skill 长期断言"`<section style="background-color">` 在长块/左色条卡片上会被剥底色，必须用 `<table bgcolor>` 双保险"。2026-08-14 律川 Planet 账号真机双层实测（Playwright 直连编辑器真实粘贴归一化层 + 保存草稿 + 服务端回读层）逐项验证了同事戴桁宇《公众号排版组件库》的争议元素，结论推翻了这条：
+
+| 实测点 | 粘贴层 | 服务端回读层 |
+|---|---|---|
+| `<section>` + `linear-gradient` 背景 | ✅ | ✅ |
+| `<section>` + `border-image:linear-gradient` 渐变竖条 | ✅ | ✅ |
+| `<section>` + `box-shadow` 双层阴影 | ✅ | ✅ |
+| `rgba()` 半透明色 | ✅ | ✅ |
+| `<table>` + `border-collapse:collapse` 三列横排 | ✅ | ✅ |
+| 行内 `linear-gradient` 下划线高亮 | ✅ | ✅ |
+
+**变更：**
+- SKILL.md：「HTML 容器」第 1 类里作废"section 会剥底色"一条，改为"`<section>` 是安全的带底色/带左竖条容器（含渐变/阴影/border-image 双层实测通过）"；`bgcolor` 双保险由"必须"降为"可选保底"
+- html-paste-whitelist.md：`<section>` 标签白名单 ⚠️→✅；CSS 白名单补 `border-image`、`box-shadow`（`<section>` 上保留、`inset` 剥、`<img>` 上慎用）、`linear-gradient 作 <section> background` 三条；"有底色的卡片用 bgcolor 双保险"章节整节作废重写；"卡片容器"示例同步改为直接 section 带底色
+- pre-paste-checklist.md：A 容器层那条"section 剥底色"检查作废改写；一键 lint 伪代码移除"缺 bgcolor 报 WARN"逻辑（留注释说明已作废）
+
+**唯一保留的谨慎点：** 三列 `<table>` 的 `td width:33.33%` 百分比仍会被 ProseMirror 剥离、迁到 `<colgroup>`、table 被 `.tableWrapper` 加 `min-width:75px`——**窄屏仍有溢出风险**，印证了老警告"嵌套 table 百分比宽度会被重排"。移动端三列卡片要控文字长度/字号。
+
+**新增（本次一并落盘）：**
+- `capabilities/wechat-visual-style/` —— 官微排版视觉组件库 skill（由戴桁宇《公众号排版组件库.md》转 skill 格式，12 套组件 + 品牌色板 + 间距节奏，补实测结论头注与三列卡片移动端溢出警示）。与避坑 skill 互补：避坑判"能不能写"，组件库给"写成什么样式"。
+
 ## 0.4.0 (2026-06-03)
 
 **新增功能：草稿箱一键上传（draft/add API）。**
