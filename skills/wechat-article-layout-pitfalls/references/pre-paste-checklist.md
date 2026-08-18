@@ -28,11 +28,11 @@
   - 替换方案：body 保持默认白底，需要色块就在具体 td 上画
 - [ ] **没有 CSS `width:100%`** —— 手机端会被算成固定像素塌成细条，满宽改用 HTML 属性 `width="100%"`
   - 检查方法：grep `style="[^"]*width:\s*100%` 应该 0 命中（`max-width` 不算）
-- [ ] **有底色的卡片用 `bgcolor` 属性 + inline 双写** —— `<section background-color>` 长块会被剥底色
-  - 检查方法：带 `background-color` 的 `<table>/<td>` 应同时有 `bgcolor=` 属性
-  - 反向：底色等于页面底色的自由段落**不要**套 table（口诀：要不要框 = 要不要 bgcolor）
+- [ ] **有底色的卡片直接用 `<section>` 带底色**（2026-08-14 双层实测已作废"section 会剥底色"）——`<section>` 上的 `background-color`/`linear-gradient`/`border-left`/`border-image`/`box-shadow` 均保留，无需 `<table bgcolor>` 双保险
+  - `bgcolor` 双保险写法仍可用作保底，但不再必要
+  - 反向：底色等于页面底色的自由段落**不要**套 table（口诀：同色不套 table，要底色直接上 section）
 - [ ] **进度条/色块没有内层 `<div background>`，空 `<td>` 都填了 `&nbsp;`+`font-size:0`** —— 否则色块被剥、空 td 手机端塌
-- [ ] **卡片外层 `<section>` 都是 `padding:0 24px`** —— 与正文对齐，否则卡片贴边、正文内缩
+- [ ] **卡片外层 `<section>` 都是 `padding:0 8px`** —— 与正文对齐，否则卡片贴边、正文内缩；24px 叠加编辑器自带边距太窄（2026-08-14 起由 24px 改为 8px）
   - 例外：full-bleed 品牌色条、通铺 hero/footer
 - [ ] **没有 `::before` / `::after`** —— grep `::before|::after` 应该 0 命中（依赖 `<style>`，必丢）
 
@@ -108,11 +108,7 @@ def lint_wechat_html(html: str) -> list[str]:
     for m in re.finditer(r'style="([^"]*\bwidth:\s*100%[^"]*)"', html):
         if 'max-width' not in m.group(1):
             errors.append(f'WARN: CSS width:100% 手机端会塌成细条，改用 HTML 属性 width="100%" — {m.group(0)[:60]}')
-    # colored card with background-color but missing bgcolor attribute
-    for m in re.finditer(r'<(table|td)\b([^>]*)>', html):
-        attrs = m.group(2)
-        if 'background-color' in attrs and 'bgcolor' not in attrs:
-            errors.append(f'WARN: <{m.group(1)}> 有 background-color 但缺 bgcolor 属性，长块底色可能被剥 — {m.group(0)[:60]}')
+    # (2026-08-14 实测已作废:section 带底色安全,bgcolor 双保险不再必要,移除原 WARN)
     # tables / tds without border:0 in inline style
     for m in re.finditer(r'<table\b[^>]*style="([^"]*)"', html):
         if 'border:0' not in m.group(1) and 'border:none' not in m.group(1):
