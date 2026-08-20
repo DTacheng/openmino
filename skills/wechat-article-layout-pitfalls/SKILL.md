@@ -2,7 +2,7 @@
 name: wechat-article-layout-pitfalls
 description: 微信公众号推文 HTML/SVG 排版避坑速查 + 草稿箱一键上传。当用户要写公众号推文、生成 HTML 排版、嵌入 SVG 插图、从已发布文章复用素材、或想通过 API 一键上传到公众号草稿箱时使用——确保 HTML 粘贴进 mp.weixin.qq.com 编辑器后样式不丢、SVG 动画不丢、正文左右对齐、图片能带得过去。覆盖 ProseMirror 编辑器的粘贴白名单、SVG/SMIL 兼容性、base64 图片要求、二次复用陷阱、以及 draft/add 草稿接口的配置与账号门槛。
 author: 常成（律川 Planet）
-version: "0.6.0"
+version: "0.6.1"
 license: CC BY-NC 4.0
 ---
 
@@ -125,4 +125,4 @@ license: CC BY-NC 4.0
 
 ## 致谢
 
-SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。0.3.0 回填的 HTML 层细节坑（CSS width 手机端塌缩 / bgcolor 双保险 / 进度条 td 色块 / 同色段落不套 table / 卡片与正文对齐 / 列表独立 p / 伪元素禁用）来自 2026-04 法律元力 / Lawvable / MyAgents 系列 13 篇推文的早期实战沉淀。0.5.0 新增的草稿迭代链路（draft/get + draft/update 同一草稿外科手术）与后台编辑器拖图坑（拖图产生副本嵌进文字、吃掉原文）来自 2026-08-14 元典开放平台 DeepSeek Harness 插件稿实战。0.5.1 新增：外层 section 缩进由 24px 改为 8px（阿成实战反馈"缩进太多、文章太窄"）、标题 32 字符硬截断与回读全等校验、draft/add 服务端清洗文档级标签的实证、mmbiz 防盗链导致本地预览裂图、草稿版本清理链路（batchget/delete）——来自 2026-08-14 元典证券合规 MCP 稿实战。0.6.0 作废"`<section>` 会剥底色/左竖条"旧结论、白名单补 `border-image`/`box-shadow`/`linear-gradient on section` 三条——来自 2026-08-14 律川 Planet 账号真机双层实测（对戴桁宇《公众号排版组件库》争议元素逐项验证），并配套新增 `wechat-visual-style` 官微视觉组件库 skill。
+SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。0.3.0 回填的 HTML 层细节坑（CSS width 手机端塌缩 / bgcolor 双保险 / 进度条 td 色块 / 同色段落不套 table / 卡片与正文对齐 / 列表独立 p / 伪元素禁用）来自 2026-04 法律元力 / Lawvable / MyAgents 系列 13 篇推文的早期实战沉淀。0.5.0 新增的草稿迭代链路（draft/get + draft/update 同一草稿外科手术）与后台编辑器拖图坑（拖图产生副本嵌进文字、吃掉原文）来自 2026-08-14 元典开放平台 DeepSeek Harness 插件稿实战。0.5.1 新增：外层 section 缩进由 24px 改为 8px（阿成实战反馈"缩进太多、文章太窄"）、标题 32 字符硬截断与回读全等校验、draft/add 服务端清洗文档级标签的实证、mmbiz 防盗链导致本地预览裂图、草稿版本清理链路（batchget/delete）——来自 2026-08-14 元典证券合规 MCP 稿实战。0.6.0 作废"`<section>` 会剥底色/左竖条"旧结论、白名单补 `border-image`/`box-shadow`/`linear-gradient on section` 三条——来自 2026-08-14 律川 Planet 账号真机双层实测（对戴桁宇《公众号排版组件库》争议元素逐项验证），并配套新增 `wechat-visual-style` 官微视觉组件库 skill。0.6.1 移除 `upload_to_draft.py` 自设的 20,000 字符正文校验（只保留微信官方 1MB 体积上限）——2026-08-20 刑事辩护全流程 Pro 版实测 38,102 字符正文 draft/add 照收、回读完整，证明字符线是脚本自设而非微信政策（阿成 2026-08-20 拍板放宽）。
