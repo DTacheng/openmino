@@ -124,7 +124,7 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 
 - **响应编码**：`draft/get` 返回可能不是 UTF-8，直接 `.json()` 会乱码导致标题核验失败。先 `resp.encoding = resp.apparent_encoding` 再解析。
 - **图片在 `data-src`**：回读回来的 content 里，`<img>` 的 URL 在 `data-src` 属性（mmbiz URL 带 `/640?from=appmsg`），`src` 为空。解析/比对时读 `data-src`；draft/update 把 data-src 格式原样写回是可用的。
-- **校验顺序**：含 base64 的 HTML 会先撑爆 20000 字符上限校验——**必须先换图（base64→mmbiz）再校验 content 长度**，顺序反了会误报。
+- **校验顺序**：含 base64 的 HTML 会先撑爆 1MB 体积校验——**必须先换图（base64→mmbiz）再校验 content 体积**，顺序反了会误报。
 
 ### 后台手动编辑的大坑：拖图会产生副本、吃掉文字
 
@@ -148,7 +148,7 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 ## 四、content 字段的约束（写 HTML 时注意）
 
 - `content` 支持 HTML 标签，但 **JS 会被去除**。
-- **总大小 < 1MB、字符数 < 20000**。base64 图片被过滤后正文体积通常很小，反而是没替换干净的 base64 会撑爆 1MB。
+- **总大小 < 1MB（微信官方正文体积上限），没有单独的字符数上限**。换图后正文体积通常很小，反而是没替换干净的 base64 会撑爆 1MB。实测（2026-08-20）：38,102 字符（46.6KB）正文 draft/add 照收、回读完整；脚本旧版自设的 20,000 字符校验并非微信政策，0.6.1 已移除。
 - 图片 URL **只认微信图床域名**（mmbiz.qpic.cn 等），外链/base64 一律过滤 → 步骤 2 必须做。
 - 草稿 API 的 content 会经过一次服务端清洗，清洗规则与"编辑器粘贴白名单"**不完全相同**。本 skill 的 HTML 排版规则（table 容器、inline style、bgcolor 双写等）依然适用且更保险。
 - **服务端清洗实证（2026-08-14 证券合规稿）**：早期版本脚本曾把整份 HTML 文档（含 DOCTYPE/html/head/meta/title/body）再包一层 `<body>` 提交，回读发现服务端把文档级标签**全部剥掉**，存储层是干净的正文片段，`<title>` 文本也不会泄漏成游离文字。结论：① 这解释了"为什么脏内容也能推成功"；② 但提交净内容仍是契约，脚本已修复为"content 已含 `<body>` 时原样写入"（防御性，不依赖未承诺的清洗行为）；③ 该问题**不是**排版/图片丢失的根因，丢图丢排版先查外链图、Markdown 路径属性清空、SVG 上传失败这三条线。
