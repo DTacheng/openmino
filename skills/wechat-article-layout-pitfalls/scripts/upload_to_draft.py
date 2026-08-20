@@ -51,7 +51,9 @@ MMBIZ_HOSTS = ("mmbiz.qpic.cn", "mmbiz.qlogo.cn")
 MAX_TITLE = 32
 MAX_AUTHOR = 16
 MAX_DIGEST = 120
-MAX_CONTENT_CHARS = 20_000
+# 微信官方正文上限是体积 <1MB（无单独字符数上限）。0.6.1 起移除旧版
+# MAX_CONTENT_CHARS=20000 的自设字符校验——2026-08-20 实测 38,102 字符
+# （46.6KB）正文 draft/add 照收、回读完整，证明该字符线并非微信政策。
 MAX_CONTENT_BYTES = 1_000_000
 
 
@@ -376,10 +378,8 @@ def _validate_metadata(title, author, digest, content) -> None:
         failures.append(f"作者 {len(author)} 字,超过 {MAX_AUTHOR} 字")
     if len(digest) > MAX_DIGEST:
         failures.append(f"摘要 {len(digest)} 字,超过 {MAX_DIGEST} 字")
-    if len(content) > MAX_CONTENT_CHARS:
-        failures.append(f"正文 HTML {len(content)} 字符,超过 {MAX_CONTENT_CHARS} 字符")
     if len(content.encode("utf-8")) >= MAX_CONTENT_BYTES:
-        failures.append("正文 HTML 超过 1MB")
+        failures.append(f"正文 HTML {len(content.encode('utf-8'))} 字节,超过微信官方 1MB 上限")
     if re.search(r"<script\b|\bon\w+\s*=|javascript:", content, re.I):
         failures.append("正文包含脚本或事件属性")
     if failures:
