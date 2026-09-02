@@ -10,11 +10,40 @@
 无论哪种输入，正文图片都会被逐张上传到微信图床换成 mmbiz URL（draft/add
 会过滤 base64 和外链图片），封面会传为永久素材拿 thumb_media_id。
 
+┌─ 改稿红线（2026-09-02 事故后并入，不可绕过）───────────────────────────────┐
+│ 已经推送进草稿箱的文章，再修改时必须就地增量更新（--update-media-id），      │
+│ 严禁用 draft/add 新建 + 删除的方式"重传"——那会把运营者在后台手动调整过的    │
+│ 头图、标题、摘要、文字一并删掉，且删除不可恢复。                             │
+│ 三道安全闸：                                                               │
+│  ① 台账加锁——同源文件再次裸 add 会被拒绝（红字提示改走增量更新）；          │
+│  ② 自动备份——每次更新前把草稿箱当前内容备份到 draft-backups/（人工版永不丢）;│
+│  ③ 人工编辑检测——草稿内容 hash 与上次推送基线不一致（＝后台被人工改过），    │
+│     默认拒绝推送，须把人工修改合并进本地源再带 --force 才放行。              │
+│ 增量更新时不传 --title/--digest/--cover 就沿用草稿箱当前值——后台改过的标题、│
+│ 摘要、封面天然保留，只替换正文。                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
 前置：
   - 环境变量或 Windows 注册表提供 WECHAT_MP_APPID / WECHAT_MP_APPSECRET
     （旧 WX_APPID / WX_APPSECRET 仍兼容，但优先使用 WECHAT_MP_* 命名）。
   - 运行脚本的机器公网出口 IP 已加入公众号后台 IP 白名单。
   - 依赖：requests, beautifulsoup4, pillow；Markdown 输入时还需要 markdown。
+
+用法（.html / .md 均已排版或源稿）：
+  首次推送：
+    python3 upload_to_draft.py article.html \
+        --title "标题（≤32字）" --author "作者" --digest "摘要" --cover 封面.jpg
+
+  修改已推送的文章（增量，media_id 不变，草稿箱里永远只有这一份）：
+    python3 upload_to_draft.py article.html --update-media-id <media_id>
+    （不传 --title/--digest/--cover 时，沿用草稿箱当前值——后台手动改过的标题、
+      摘要、封面不会被冲掉；只有 content 会被新源替换）
+
+  只备份/登记当前草稿内容（把后台人工版导出到本地，不推送）：
+    python3 upload_to_draft.py article.html --update-media-id <media_id> --export-current
+
+  人工改过草稿、且已把人工修改合并进新源之后的强制推送：
+    python3 upload_to_draft.py article.html --update-media-id <media_id> --force
 
 本脚本只做到「进草稿箱」为止，不自动群发/发布；最后一步由人工在
 mp.weixin.qq.com 后台或手机端公众号助手确认。
@@ -25,6 +54,7 @@ from __future__ import annotations
 import argparse
 import base64
 import getpass
+import hashlib
 import io
 import json
 import os
@@ -44,8 +74,17 @@ try:
 except ImportError:
     HAS_PIL = False
 
+# Windows 控制台中文输出兜底（中文在部分终端会变乱码）
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 API = "https://api.weixin.qq.com/cgi-bin"
 TOKEN_CACHE = Path(".wx_token_cache.json")
+MANIFEST = Path(".wx_draft_manifest.json")       # 推送台账：源文件名 → media_id + 内容基线 hash
+BACKUP_DIR = Path("draft-backups")               # 每次 update 前的人工版备份目录
 MMBIZ_HOSTS = ("mmbiz.qpic.cn", "mmbiz.qlogo.cn")
 
 MAX_TITLE = 32
@@ -59,6 +98,12 @@ MAX_CONTENT_BYTES = 1_000_000
 
 class WeChatError(RuntimeError):
     pass
+
+
+def _jresp(r) -> dict:
+    """统一按 UTF-8 解码微信响应。requests 对无 charset 的响应会误判成 latin-1，
+    中文被拆成双倍字符（曾导致 45110 author size out of limit）。"""
+    return json.loads(r.content.decode("utf-8"))
 
 
 # ---------- 凭据 ----------
@@ -119,11 +164,11 @@ def get_access_token(appid: str, secret: str) -> str:
                 return c["access_token"]
         except Exception:
             pass
-    r = requests.post(
+    r = _jresp(requests.post(
         f"{API}/stable_token",
         json={"grant_type": "client_credential", "appid": appid, "secret": secret},
         timeout=20,
-    ).json()
+    ))
     if "access_token" not in r:
         raise WeChatError(_explain(r, "获取 access_token 失败"))
     TOKEN_CACHE.write_text(json.dumps({
@@ -279,8 +324,8 @@ def _img_bytes_from_src(src: str, html_dir: Path) -> bytes | None:
 def upload_content_image(token: str, raw: bytes, name: str) -> str:
     data, fname = _normalize_image(raw, name)
     files = {"media": (fname, data, "image/jpeg" if fname.endswith("jpg") else "image/png")}
-    r = requests.post(f"{API}/media/uploadimg", params={"access_token": token},
-                      files=files, timeout=60).json()
+    r = _jresp(requests.post(f"{API}/media/uploadimg", params={"access_token": token},
+                             files=files, timeout=60))
     if r.get("errcode", 0) != 0 or "url" not in r:
         raise WeChatError(_explain(r, f"uploadimg 失败（{name}）"))
     return r["url"]
@@ -289,9 +334,9 @@ def upload_content_image(token: str, raw: bytes, name: str) -> str:
 def upload_thumb(token: str, raw: bytes, name: str) -> str:
     data, fname = _normalize_image(raw, name)
     files = {"media": (fname, data, "image/jpeg" if fname.endswith("jpg") else "image/png")}
-    r = requests.post(f"{API}/material/add_material",
-                      params={"access_token": token, "type": "image"},
-                      files=files, timeout=60).json()
+    r = _jresp(requests.post(f"{API}/material/add_material",
+                             params={"access_token": token, "type": "image"},
+                             files=files, timeout=60))
     if "media_id" not in r:
         raise WeChatError(_explain(r, "封面上传为永久素材失败"))
     return r["media_id"]
@@ -324,8 +369,8 @@ def process_html(token: str, html_path: Path) -> tuple[str, bytes | None, str | 
 # ---------- draft API ----------
 def add_draft(token: str, article: dict) -> str:
     payload = json.dumps({"articles": [article]}, ensure_ascii=False).encode("utf-8")
-    r = requests.post(f"{API}/draft/add", params={"access_token": token},
-                      data=payload, timeout=60).json()
+    r = _jresp(requests.post(f"{API}/draft/add", params={"access_token": token},
+                             data=payload, timeout=60))
     if "media_id" not in r:
         raise WeChatError(_explain(r, "draft/add 失败"))
     return r["media_id"]
@@ -335,24 +380,62 @@ def get_draft(token: str, media_id: str) -> dict:
     resp = requests.post(f"{API}/draft/get", params={"access_token": token},
                          data=json.dumps({"media_id": media_id}, ensure_ascii=False).encode("utf-8"),
                          timeout=60)
-    # 微信 draft/get 返回可能非 UTF-8，先按 apparent_encoding 解码
-    enc = resp.apparent_encoding or "utf-8"
-    try:
-        r = json.loads(resp.content.decode(enc))
-    except Exception:
-        r = json.loads(resp.text)
-    if r.get("errcode", 0) not in (0, None):
-        raise WeChatError(_explain(r, "draft/get 失败"))
+    # 统一用 _jresp 显式 UTF-8 解码（requests 对无 charset 误判 latin-1，会把中文翻倍）
+    r = _jresp(resp)
+    if r.get("errcode", 0) not in (0, None) and "news_item" not in r:
+        raise WeChatError(_explain(r, f"draft/get 失败（media_id={media_id[:20]}…）"))
     return r
 
 
-def update_draft(token: str, media_id: str, article: dict) -> None:
-    payload = json.dumps({"media_id": media_id, "index": 0, "articles": article},
+def update_draft(token: str, media_id: str, index: int, article: dict) -> None:
+    payload = json.dumps({"media_id": media_id, "index": index, "articles": article},
                          ensure_ascii=False).encode("utf-8")
-    r = requests.post(f"{API}/draft/update", params={"access_token": token},
-                      data=payload, timeout=60).json()
+    r = _jresp(requests.post(f"{API}/draft/update", params={"access_token": token},
+                             data=payload, timeout=60))
     if r.get("errcode", 0) not in (0, None):
         raise WeChatError(_explain(r, "draft/update 失败"))
+
+
+# ---------- 台账与备份（改稿红线三道闸） ----------
+def _load_manifest() -> dict:
+    if MANIFEST.exists():
+        try:
+            return json.loads(MANIFEST.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_manifest(m: dict) -> None:
+    MANIFEST.write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _sha1(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
+
+def _backup_draft(media_id: str, news_item: dict, tag: str) -> Path:
+    """把草稿箱当前内容备份到 draft-backups/，返回备份 html 路径。人工版永不丢。"""
+    BACKUP_DIR.mkdir(exist_ok=True)
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    base = BACKUP_DIR / f"{media_id[:16]}-{tag}-{ts}"
+    (base.with_suffix(".json")).write_text(
+        json.dumps({"media_id": media_id, "news_item": news_item},
+                   ensure_ascii=False, indent=2), encoding="utf-8")
+    html_p = base.with_suffix(".html")
+    html_p.write_text(news_item.get("content", ""), encoding="utf-8")
+    return html_p
+
+
+def _record_baseline(key: str, media_id: str, token: str) -> None:
+    """add/update 之后立即回读草稿箱，把微信规范化后的内容 hash 记为基线。
+    供下次 update 时做"后台是否被人工改过"判定。"""
+    cur = get_draft(token, media_id)
+    item = cur["news_item"][0]
+    m = _load_manifest()
+    m[key] = {"media_id": media_id, "content_sha": _sha1(item.get("content", "")),
+              "pushed_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+    _save_manifest(m)
 
 
 def _explain(resp: dict, prefix: str) -> str:
@@ -365,6 +448,7 @@ def _explain(resp: dict, prefix: str) -> str:
         45009: "超天级调用频率，次日恢复",
         40005: "图片格式不对（只收 jpg/png）",
         40009: "图片尺寸/大小超限（需 <1MB）",
+        40007: "media_id 无效（草稿可能已被后台删除）",
     }
     extra = f"\n  → {tips[code]}" if code in tips else ""
     return f"{prefix}：{resp}{extra}"
@@ -388,14 +472,19 @@ def _validate_metadata(title, author, digest, content) -> None:
 
 # ---------- 主流程 ----------
 def parse_args() -> argparse.Namespace:
-    ap = argparse.ArgumentParser(description="公众号推文一键进草稿箱（支持 .html 排版稿 / .md 源稿）")
+    ap = argparse.ArgumentParser(description="公众号推文一键进草稿箱（支持 .html 排版稿 / .md 源稿 + 增量更新）")
     ap.add_argument("source", type=Path, help="源文件：.html 已排版稿 或 .md Markdown 稿")
     ap.add_argument("--title", help="标题（≤32字）；Markdown 未提供时必填")
     ap.add_argument("--author", default="", help="作者（≤16字）")
     ap.add_argument("--digest", default="", help="摘要（≤128字）；Markdown 留空自动提取")
     ap.add_argument("--cover", type=Path, help="封面图路径；不传则取正文第一张可上传图片")
     ap.add_argument("--source-url", default="", help="阅读原文链接（可选）")
-    ap.add_argument("--update-media-id", help="更新现有草稿而不是新增")
+    ap.add_argument("--update-media-id", help="更新现有草稿而不是新增（改稿必须用这个，media_id 不变）")
+    ap.add_argument("--update", dest="update_media_id", help="--update-media-id 的别名")
+    ap.add_argument("--export-current", action="store_true",
+                    help="只把草稿箱当前内容备份导出到本地并登记基线，不推送（用于先导出人工修改再合并）")
+    ap.add_argument("--force", action="store_true",
+                    help="检测到草稿在后台被人工改过时，确认人工修改已合并进本地源后用此参数强制推送")
     return ap.parse_args()
 
 
@@ -405,30 +494,67 @@ def main() -> int:
     if not source.is_file():
         raise WeChatError(f"找不到源文件：{source}")
 
+    # 台账 key：以源文件名锚定（同一篇稿改版也用同一文件名，便于记住 media_id）
+    key = source.name
+    manifest = _load_manifest()
+
     suffix = source.suffix.lower()
+
+    print("· 取 access_token …")
+    appid, secret = get_credentials()
+    token = get_access_token(appid, secret)
+
+    # ===== 路径一：增量更新（改稿唯一正道） =====
+    if args.update_media_id or args.export_current:
+        media_id = args.update_media_id or (manifest.get(key) or {}).get("media_id")
+        if not media_id:
+            raise WeChatError("没有可更新的 media_id：请用 --update-media-id <media_id> 指定，"
+                              "或先首次推送过一次")
+        cur = get_draft(token, media_id)
+        item = (cur.get("news_item") or [{}])[0]
+        backup_html = _backup_draft(media_id, item, tag="pre-update")
+        cur_sha = _sha1(item.get("content", ""))
+        baseline = manifest.get(key) or {}
+        manual_edited = bool(baseline.get("content_sha")) and baseline["content_sha"] != cur_sha
+
+        print(f"· 草稿箱当前版本已备份 → {backup_html}")
+        print(f"  （标题：{item.get('title','')}｜封面 media_id：{(item.get('thumb_media_id') or '')[:20]}…）")
+
+        if args.export_current:
+            if not manual_edited and not baseline.get("content_sha"):
+                baseline["content_sha"] = cur_sha
+            manifest[key] = {**baseline, "media_id": media_id}
+            _save_manifest(manifest)
+            print(f"\n✅ 已导出并登记基线（未推送）。"
+                  f"{'检测到该草稿与基线不一致——后台有人工修改，请先合并进本地源再 --force 推送。' if manual_edited else ''}")
+            return 0
+
+        if manual_edited and not args.force:
+            print("\n🛑 改稿红线：检测到草稿在后台被人工修改过（内容 hash 与上次推送基线不一致）。")
+            print("   人工修改版已备份，为避免冲掉这些修改，本次拒绝推送。")
+            print(f"   ① 先查看人工版：{backup_html}")
+            print("   ② 把人工修改合并进本地源")
+            print("   ③ 确认合并完成后，带 --force 重新运行")
+            return 2
+        if manual_edited and args.force:
+            print("⚠️  --force：人工版已备份，按你的确认覆盖推送。")
+
+    # ===== 渲染/取正文 =====
     if suffix == ".md":
         title, auto_digest, content = render_markdown(source, args.title)
     elif suffix in (".html", ".htm"):
-        if not args.title:
-            raise WeChatError("HTML 源稿必须提供 --title")
-        title = args.title
+        if not args.title and not (args.update_media_id or args.export_current):
+            raise WeChatError("HTML 源稿首次推送必须提供 --title")
+        title = args.title or ""
         content = source.read_text(encoding="utf-8")
         text = BeautifulSoup(content, "html.parser").get_text(" ", strip=True)
         auto_digest = re.sub(r"\s+", "", text)[:MAX_DIGEST]
     else:
         raise WeChatError("源文件必须是 .md 或 .html/.htm")
 
-    digest = args.digest or auto_digest
-    author = args.author
-
-    print("· 取 access_token …")
-    appid, secret = get_credentials()
-    token = get_access_token(appid, secret)
-
+    # 处理正文图片（写临时 HTML 复用换图逻辑）
     print("· 处理正文图片 …")
-    # 先把 content 写成临时 HTML，复用 process_html 的换图逻辑
     tmp_html = source.with_suffix(".tmp_upload.html")
-    # 修复：若 content 本身已是完整 HTML（含 body），直接写入，避免嵌套 <html><body>
     if re.search(r"<body\b", content, re.I):
         tmp_html.write_text(content, encoding="utf-8")
     else:
@@ -437,51 +563,85 @@ def main() -> int:
         content, first_bytes, first_name = process_html(token, tmp_html)
     finally:
         tmp_html.unlink(missing_ok=True)
-    _validate_metadata(title, author, digest, content)
 
-    print("· 上传封面 …")
-    if args.cover:
-        cover_raw = args.cover.read_bytes()
-        thumb_id = upload_thumb(token, cover_raw, args.cover.name)
-    elif first_bytes is not None:
-        thumb_id = upload_thumb(token, first_bytes, first_name)
-        print("  （未指定 --cover，已用正文首图作封面）")
-    else:
-        raise WeChatError("没有可用封面：请用 --cover 指定一张，或确保正文有可上传图片")
-
-    article = {
-        "article_type": "news",
-        "title": title[:MAX_TITLE],
-        "author": author[:MAX_AUTHOR],
-        "digest": digest[:MAX_DIGEST],
-        "content": content,
-        "content_source_url": args.source_url,
-        "thumb_media_id": thumb_id,
-        "need_open_comment": 0,
-        "only_fans_can_comment": 0,
-    }
-
-    print("· 新增草稿 …")
+    # ===== 组装 article dict =====
     if args.update_media_id:
-        existing = get_draft(token, args.update_media_id)
-        items = existing.get("news_item") or []
-        if not items or not items[0].get("thumb_media_id"):
-            raise WeChatError("现有草稿没有可复用的封面素材 ID。")
-        article["thumb_media_id"] = items[0]["thumb_media_id"]
-        update_draft(token, args.update_media_id, article)
+        # 未显式指定的字段一律沿用草稿箱当前值（保住后台人工改过的标题/摘要/封面/作者）
+        item = (get_draft(token, args.update_media_id).get("news_item") or [{}])[0]
+        article = {
+            "article_type": "news",
+            "title": (args.title or item.get("title", ""))[:MAX_TITLE],
+            "author": (args.author or item.get("author", ""))[:MAX_AUTHOR],
+            "digest": (args.digest or item.get("digest", ""))[:MAX_DIGEST],
+            "content": content,
+            "content_source_url": args.source_url or item.get("content_source_url", ""),
+            "thumb_media_id": item.get("thumb_media_id", ""),
+            "need_open_comment": item.get("need_open_comment", 0),
+            "only_fans_can_comment": item.get("only_fans_can_comment", 0),
+        }
+        if args.cover:
+            print("· 上传新封面 …")
+            article["thumb_media_id"] = upload_thumb(token, args.cover.read_bytes(), args.cover.name)
+        elif not article["thumb_media_id"]:
+            if first_bytes is not None:
+                print("· 草稿无封面，用正文首图补 …")
+                article["thumb_media_id"] = upload_thumb(token, first_bytes, first_name)
+            else:
+                raise WeChatError("草稿没有封面且正文无可上传图片，请用 --cover 指定")
+    else:
+        article = {
+            "article_type": "news",
+            "title": title[:MAX_TITLE],
+            "author": args.author[:MAX_AUTHOR],
+            "digest": (args.digest or auto_digest)[:MAX_DIGEST],
+            "content": content,
+            "content_source_url": args.source_url,
+        }
+        print("· 上传封面 …")
+        if args.cover:
+            article["thumb_media_id"] = upload_thumb(token, args.cover.read_bytes(), args.cover.name)
+        elif first_bytes is not None:
+            article["thumb_media_id"] = upload_thumb(token, first_bytes, first_name)
+            print("  （未指定 --cover，已用正文首图作封面）")
+        else:
+            raise WeChatError("没有可用封面：正文没有可上传的图片，请用 --cover 指定一张")
+        article["need_open_comment"] = 0
+        article["only_fans_can_comment"] = 0
+
+    _validate_metadata(article["title"], article["author"], article["digest"], content)
+
+    if args.update_media_id:
+        print("· 就地更新草稿（media_id 不变，不新建不删除）…")
+        update_draft(token, args.update_media_id, 0, article)
+        _record_baseline(key, args.update_media_id, token)
         media_id = args.update_media_id
         mode = "update"
     else:
+        # 改稿红线闸①：台账加锁——已推送过的 html 禁止裸 add 覆盖
+        if key in manifest and manifest[key].get("media_id"):
+            prev = manifest[key]["media_id"]
+            print("🛑 改稿红线：这篇源文件之前已经推送过草稿箱。")
+            print(f"   现有草稿 media_id = {prev}")
+            print("   修改已推送的文章必须增量更新（media_id 不变），禁止新建+删旧覆盖：")
+            print(f"   python3 {Path(sys.argv[0]).name} {source.name} --update-media-id {prev}")
+            print("   （后台若有人工修改，脚本会先备份并要求合并后再 --force）")
+            return 2
+        print("· 新增草稿 …")
         media_id = add_draft(token, article)
+        _record_baseline(key, media_id, token)  # 立即回读登记基线，供后续人工改动检测
         mode = "push"
 
-    # 回读核验
+    # 回读核验（标题一致性）
     verified = get_draft(token, media_id)
     v_items = verified.get("news_item") or []
-    if not v_items or v_items[0].get("title") != title:
+    if not v_items or v_items[0].get("title") != article["title"]:
         raise WeChatError("草稿回读标题与提交不一致，请人工到草稿箱复核。")
 
-    print(f"\n✅ 已进草稿箱。draft media_id = {media_id}（mode={mode}）")
+    print(f"\n✅ 已{'增量更新' if mode == 'update' else '进'}草稿箱。draft media_id = {media_id}（mode={mode}）")
+    if mode == "update":
+        print("   后台人工修改过的标题/摘要/封面已保留；被替换的旧正文备份在 draft-backups/。")
+    else:
+        print(f"   台账已登记：之后改这篇必须用 --update-media-id {media_id}，不要重新裸 add。")
     print("   到 mp.weixin.qq.com 后台「草稿箱」预览/调封面后，人工发布。")
     return 0
 
