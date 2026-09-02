@@ -63,7 +63,21 @@ python capabilities/wechat-article-layout-pitfalls/scripts/upload_to_draft.py \
 - Markdown 会自动提取标题/摘要；`### 摘要`、`## 配图建议`、`## 发布审核提示`、`> 备选标题` 等内部块会被剔除，不进正文。
 - HTML 源稿必须显式提供 `--title`。
 - 正文本地相对路径图片（如 `![x](./img.jpg)`）或 base64 图片会被自动上传为 mmbiz URL。
-- `--update-media-id <id>` 可更新已有草稿而非新增。
+
+### 改稿红线：已推送草稿只能增量更新（0.7.0 起脚本强制）
+
+已经推进草稿箱的文章，再改**必须**用 `--update-media-id <id>` 增量更新（media_id 不变、不新建不删除），**严禁**裸 `add` 全量重推（会把后台手动改过的头图/标题/摘要/文字全部删掉且不恢复）：
+
+```bash
+python upload_to_draft.py article.html --update-media-id <media_id>
+```
+
+三道安全闸拦手滑：
+1. 已推过的源文件再裸 `add` → 按台账拒绝（exit 2）；
+2. 更新前自动备份草稿箱当前内容到 `draft-backups/`；
+3. 检测到草稿被后台人工改过 → 默认拒绝（exit 2），须先把人工版 diff 出来合并进本地源，再带 `--force` 重推。
+
+增量更新时不传 `--title/--author/--digest/--cover/--source-url` 会沿用草稿箱当前值（后台改过的标题/摘要/封面天然保留）。不确定草稿状态时，先 `--update-media-id <id> --export-current`（只备份+登记基线、不推送）。
 
 ## 常见错误码
 
