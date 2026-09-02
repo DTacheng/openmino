@@ -120,6 +120,17 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 
 `upload_to_draft.py --update-media-id <id>` 封装了这条链路。
 
+### 0.7.0 起的自动化安全闸（防"重推覆盖后台手动编辑"事故）
+
+人工"外科手术式"改法很稳，但 2026-09-02 发生过误用 `draft/add` 新建 + 删旧的"重传"把后台手动编辑全部冲掉的事故。0.7.0 把这条链路做成脚本强制，三道闸：
+
+1. **台账加锁**：脚本维护 `.wx_draft_manifest.json`，记录源文件名 → media_id + 内容基线 hash。同一源文件已经推过再裸 `add` → 直接**拒绝**（exit 2）并红字提示改用 `--update-media-id`，杜绝"新建+删旧"式重传。
+2. **自动备份**：走更新路径时，先把 `draft/get` 拿到的草稿箱当前内容存一份到 `draft-backups/`（json + html），人工版本永远可回溯。
+3. **人工编辑检测**：更新前把 `draft/get` 的内容 sha1 与基线比对，不一致＝后台被人工改过 → 默认**拒绝推送**（exit 2）。此时应把 `draft-backups/` 里的人工版 diff 出来，把用户的手动修改合并进本地源，再 `--force` 重推。
+4. **字段沿用**：增量更新时不传 `--title/--author/--digest/--cover/--source-url` 就自动沿用草稿箱当前值——后台改过的标题/摘要/封面不会被冲掉，只替换 content。
+
+应急判断草稿状态（不推送）：`--update-media-id <id> --export-current` 只把当前草稿备份到本地并登记基线。手动脚本（非 0.7.0）仍须按上面"「三」人工链路"第 3 步 `articles` **带全字段**；0.7.0 脚本已自动处理字段沿用，无需手工带全。
+
 ### 三个实测坑（今天各踩一次）
 
 - **响应编码**：`draft/get` 返回可能不是 UTF-8，直接 `.json()` 会乱码导致标题核验失败。先 `resp.encoding = resp.apparent_encoding` 再解析。
