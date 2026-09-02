@@ -2,7 +2,7 @@
 name: wechat-article-layout-pitfalls
 description: 微信公众号推文 HTML/SVG 排版避坑速查 + 草稿箱一键上传。当用户要写公众号推文、生成 HTML 排版、嵌入 SVG 插图、从已发布文章复用素材、或想通过 API 一键上传到公众号草稿箱时使用——确保 HTML 粘贴进 mp.weixin.qq.com 编辑器后样式不丢、SVG 动画不丢、正文左右对齐、图片能带得过去。覆盖 ProseMirror 编辑器的粘贴白名单、SVG/SMIL 兼容性、base64 图片要求、二次复用陷阱、以及 draft/add 草稿接口的配置与账号门槛。
 author: 常成（律川 Planet）
-version: "0.6.1"
+version: "0.7.0"
 license: CC BY-NC 4.0
 ---
 
@@ -52,6 +52,15 @@ license: CC BY-NC 4.0
 - ✅ 走 `draft/get` 拉回线上当前内容 → 在拉回的 HTML 上**外科手术式**只改目标元素 → `draft/update` 写回同一 media_id → 再 `draft/get` 回读核验。脚本用 `--update-media-id <id>`
 - ⚠️ **后台编辑器拖图坑**：用户在网页版编辑器拖动图片调位置时，编辑器会把图片副本嵌进段落文字里、并把原文从中间截断吃掉——症状是"图一张不少，但顺序乱、文字缺段"。诊断靠 draft/get 拉回后按顺序 dump 元素（p/img/table）和用户截图对位；修法是删掉嵌在文字里的重复 `<img>`、补回被吃掉的文字。详见 `references/draft-api-upload.md` 第三节
 - ⚠️ draft/get 两个解析坑：响应可能非 UTF-8（用 `resp.apparent_encoding` 解码）；图片 URL 在 `data-src`，`src` 为空
+
+**改稿红线自动化（0.7.0 新增，防"重推覆盖后台手动编辑"事故）：** 脚本现在对已推送草稿做了三道自动安全闸，主观上你仍然可以"外科手术式"改，但脚本会兜底防手滑——不要把本地源改完后再**裸 `add` 全量重推**（会把后台手动改过的头图/标题/摘要/文字全部删掉且不恢复）。正确姿势：
+
+1. 改完本地源后，用 `--update-media-id <id>` 增量更新（media_id 不变、不新建不删除；不带 `--title/--digest/--cover` 时沿用草稿箱当前值，保住后台手动改过的标题/摘要/封面）
+2. 脚本会在更新前**自动备份**草稿箱当前内容到 `draft-backups/`（人工版永不丢）
+3. 若检测到草稿在后台被人工改过（内容 hash 与上次推送基线不一致）：默认**拒绝推送**（exit 2），须先把人工版 diff 出来合并进本地源，再带 `--force` 重推
+4. 已推送过的 html 想裸 add → 脚本按台账**拒绝**并红字提示改走增量更新
+
+应急：不确定草稿状态时，先 `--update-media-id <id> --export-current` 把后台人工版导出到本地、登记基线、不推送，再决定怎么改。
 
 不要尝试这些路径，会浪费时间：
 - 秀米 / 壹伴 / 135 编辑器同步（做排版可以，但对 `<table>` 自定义结构和复杂 SVG 支持反而更差；它们的"同步到草稿箱"本质就是帮你调 draft/add）
@@ -125,4 +134,4 @@ license: CC BY-NC 4.0
 
 ## 致谢
 
-SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。0.3.0 回填的 HTML 层细节坑（CSS width 手机端塌缩 / bgcolor 双保险 / 进度条 td 色块 / 同色段落不套 table / 卡片与正文对齐 / 列表独立 p / 伪元素禁用）来自 2026-04 法律元力 / Lawvable / MyAgents 系列 13 篇推文的早期实战沉淀。0.5.0 新增的草稿迭代链路（draft/get + draft/update 同一草稿外科手术）与后台编辑器拖图坑（拖图产生副本嵌进文字、吃掉原文）来自 2026-08-14 元典开放平台 DeepSeek Harness 插件稿实战。0.5.1 新增：外层 section 缩进由 24px 改为 8px（阿成实战反馈"缩进太多、文章太窄"）、标题 32 字符硬截断与回读全等校验、draft/add 服务端清洗文档级标签的实证、mmbiz 防盗链导致本地预览裂图、草稿版本清理链路（batchget/delete）——来自 2026-08-14 元典证券合规 MCP 稿实战。0.6.0 作废"`<section>` 会剥底色/左竖条"旧结论、白名单补 `border-image`/`box-shadow`/`linear-gradient on section` 三条——来自 2026-08-14 律川 Planet 账号真机双层实测（对戴桁宇《公众号排版组件库》争议元素逐项验证），并配套新增 `wechat-visual-style` 官微视觉组件库 skill。0.6.1 移除 `upload_to_draft.py` 自设的 20,000 字符正文校验（只保留微信官方 1MB 体积上限）——2026-08-20 刑事辩护全流程 Pro 版实测 38,102 字符正文 draft/add 照收、回读完整，证明字符线是脚本自设而非微信政策（阿成 2026-08-20 拍板放宽）。
+SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。0.3.0 回填的 HTML 层细节坑（CSS width 手机端塌缩 / bgcolor 双保险 / 进度条 td 色块 / 同色段落不套 table / 卡片与正文对齐 / 列表独立 p / 伪元素禁用）来自 2026-04 法律元力 / Lawvable / MyAgents 系列 13 篇推文的早期实战沉淀。0.5.0 新增的草稿迭代链路（draft/get + draft/update 同一草稿外科手术）与后台编辑器拖图坑（拖图产生副本嵌进文字、吃掉原文）来自 2026-08-14 元典开放平台 DeepSeek Harness 插件稿实战。0.5.1 新增：外层 section 缩进由 24px 改为 8px（阿成实战反馈"缩进太多、文章太窄"）、标题 32 字符硬截断与回读全等校验、draft/add 服务端清洗文档级标签的实证、mmbiz 防盗链导致本地预览裂图、草稿版本清理链路（batchget/delete）——来自 2026-08-14 元典证券合规 MCP 稿实战。0.6.0 作废"`<section>` 会剥底色/左竖条"旧结论、白名单补 `border-image`/`box-shadow`/`linear-gradient on section` 三条——来自 2026-08-14 律川 Planet 账号真机双层实测（对戴桁宇《公众号排版组件库》争议元素逐项验证），并配套新增 `wechat-visual-style` 官微视觉组件库 skill。0.6.1 移除 `upload_to_draft.py` 自设的 20,000 字符正文校验（只保留微信官方 1MB 体积上限）——2026-08-20 刑事辩护全流程 Pro 版实测 38,102 字符正文 draft/add 照收、回读完整，证明字符线是脚本自设而非微信政策（阿成 2026-08-20 拍板放宽）。0.7.0 把"同一草稿上迭代"从人工纪律升级为**脚本强制**：新增三道安全闸（台账加锁拒绝重复裸 add ／更新前自动备份到 draft-backups/ ／sha1 基线检测后台人工编辑、不一致默认拒绝、需 --force），增量更新时未指定字段沿用手稿当前值——源于 2026-09-02 误用 add+delete 重推覆盖运营者在后台的手动编辑事故（已不可恢复），阿成要求任何已推送草稿必须增量更新。
