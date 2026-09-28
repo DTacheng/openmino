@@ -72,6 +72,10 @@
 - [ ] **`<img>` 上没有 `box-shadow`** —— 复合 css 可能让整个 img 被丢
   - 检查方法：grep `<img[^>]*box-shadow`
   - img 的 style 保持干净：display / width / height / border / margin 就够了
+- [ ] **表格内的每张 `<img>` 都带 HTML `width` 属性**（2026-09-21 实战新增）—— 微信手机客户端不认表格内图的 CSS 宽度，缺属性手机端渲染成小色块（桌面编辑器与本地 playwright 均正常，复现不了）
+  - 检查方法：对每个 `<table>…</table>` 块，grep 内部 `<img` 且无 `\bwidth="` 属性
+  - 规范写法：CSS 与 HTML 属性双写 `<img style="width:160px;height:auto;display:inline-block;border:0;" width="160">`
+  - 另：转载稿的外链/他号 mmbiz 图必须转存本账号，否则手机端被素材归属校验拦掉
 - [ ] **每张图 base64 ≤135KB（实测安全线）** —— 对应原图 ~100KB JPEG
   - >150KB base64 在粘贴时常被静默吃掉
   - 大图先用 PIL/Sharp 缩到 800px 宽再编码
@@ -146,6 +150,11 @@ def lint_wechat_html(html: str) -> list[str]:
             errors.append(f'FATAL: <img> src 不是 base64 — {m.group(1)[:50]}')
     if re.search(r'<img[^>]*box-shadow', html):
         errors.append('FATAL: <img> 上有 box-shadow，可能让 img 被吃掉')
+    # 表格内图片缺 HTML width 属性 → 手机客户端不认 CSS 宽度，渲染成小色块（2026-09-21 实战）
+    for tbl in re.finditer(r'<table\b.*?</table>', html, re.S):
+        for img in re.finditer(r'<img\b[^>]*>', tbl.group(0)):
+            if not re.search(r'\bwidth="', img.group(0)):
+                errors.append(f'FATAL: 表格内 <img> 缺 HTML width 属性，手机端变小色块（客户端不认 CSS 宽度）— {img.group(0)[:80]}')
     # base64 image >135KB
     for m in re.finditer(r'<img[^>]+src="data:image/[^;]+;base64,([^"]+)"', html):
         if len(m.group(1)) > 135 * 1024:
