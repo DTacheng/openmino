@@ -154,6 +154,20 @@
 
 `max-width:520px` 这种兜上限的可以留在 CSS；`width="100%"` 走 HTML 属性兜下限。`<td>` 的列宽同理用 `width="X%"` 属性，不写 CSS。
 
+### 表格内的 `<img>` 必须带 HTML `width` 属性（2026-09-21 实战新增）
+
+微信**手机客户端**对表格内图片不认 CSS 宽度：只写 `style="width:160px"` 的图，手机端渲染成比一个字还小的色块。桌面编辑器与本地 Playwright 375px 视口实测全部正常——客户端私有渲染逻辑无法用浏览器复现，**headless 验证不设防**。section 普通流内的图不受影响（CSS 宽度认）。
+
+```html
+<!-- ❌ 只有 CSS 宽度，手机端表格内变小色块 -->
+<img src="..." style="width:160px;height:auto;display:inline-block;border:0;" alt="..."/>
+
+<!-- ✅ CSS 与 HTML width 属性双写 -->
+<img src="..." style="width:160px;height:auto;display:inline-block;border:0;" width="160" alt="..."/>
+```
+
+佐证：编辑器自己生成的小图就是 `data-w="300"` + `width="76"` 属性形态。转载/复用他人文章时逐张检查表格内 `<img>` 是否缺 `width` 属性。
+
 ### 有底色的卡片：`<section>` 直接带底色即可（2026-08-14 双层实测作废旧结论）
 
 > ⚠️ 本小节的旧结论已作废。旧版声称"`<section background-color>` 长块/左色条会被剥底色、必须用 `<table bgcolor>` 双保险"，经 2026-08-14 律川 Planet 账号真机双层实测（粘贴归一化层 + 服务端保存回读层）**均未复现**：`<section>` 上的纯色、`linear-gradient` 背景、`border-left` 竖条、`border-image` 渐变竖条、`box-shadow` 双层阴影**全部保留**。`<section>` 是安全的带底色/竖条容器。
