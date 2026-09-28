@@ -145,6 +145,29 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 - **修法**：删掉嵌在文字 span 里的重复 `<img>`，补回被吃掉的文字（对照本地 article.html 的原句），其余不动。
 - **预防**：提醒用户后台微调尽量只改文字；挪图后检查相邻段落文字是否完整。
 
+### 40007 封面绑定坑：draft/update 全拒、get/batchget 正常（2026-09-21 实战新增）
+
+**症状**：对同一 media_id `draft/update` 全部报 `40007 invalid media_id`，而 `draft/get`、`draft/batchget` 一切正常。换 token、换 payload、关编辑器、退手机助手都无效——报错文案有误导，**不是草稿 ID 无效**。
+
+**根因**：运营者在后台编辑器里动过封面并保存。新编辑器把封面存成 crop 引用（`cover_info.crop_percent_list` + `thumb_url`），草稿里的 `thumb_media_id` 被抹成空串；`draft/update` 校验草稿内封面合法性即拒。
+
+**修复四步**：
+
+1. `draft/get` 拿到 `thumb_url`，下载原图；
+2. `material/add_material?type=image` 重传为**永久素材**，拿新 media_id；
+3. `draft/update` payload 的 `thumb_media_id` 换成新 media_id（可同时把内容一次写回）；
+4. `draft/get` 回读核验。
+
+**边界（判别实验实证）**：API 造测试草稿 → 后台打开并保存 → update 仍 ok——"后台保存即锁"不成立，锁的只是封面被抹空的草稿。代价：封面裁剪参数丢失需后台重裁；**后台再动封面可能再次抹掉绑定**，所以增量改稿前先 draft/get 检查 `thumb_media_id` 是否为空串。
+
+### 回读核验按特征比对，别全等比对（2026-09-21 实测）
+
+后台保存/服务端会对内容做规范化，写回后回读**不可能与提交串全等**。核验按结构特征：图片数、SVG 数、table 数、关键段落文字、标题全等。已实测的规范化行为：
+
+- mmbiz URL 尺寸参数 `/0` 会被改成 `/640`；
+- `<p style="text-align:center">` 会被后台保存规范化成 `<section nodeleaf>`；
+- 空摘要（digest）自动补正文前 54 字。
+
 ### 草稿版本清理：batchget + delete（2026-08-14 实战新增）
 
 一篇文章反复推送/改题重推会在草稿箱堆出一串同名草稿。定稿后清理旧版：
@@ -166,6 +189,7 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 - **标题 32 字符硬截断**：`draft/add` 的 title 上限 32 字符（含标点），脚本按 `title[:32]` 静默截断、无报错。定稿标题必须 ≤32 字验收；推送后回读做 title **全等比对**，不一致立即改题重推（2026-08-14 证券合规稿 33 字标题被截掉末字"体"，靠回读才发现）。
 - **inline `<svg>` 经 draft API 是否保留没有官方保证**（编辑器手动粘贴是确认零过滤的，但接口清洗链路不同）。稳妥做法：走草稿 API 时把 SVG 先栅格化成 PNG（≤1MB）当普通图片走步骤 2；需要保留 SVG 动画就回退到手动粘贴工作流。
 - **mmbiz 防盗链**：回读版 content 里的 mmbiz 图床 URL 有 Referer 校验，本地用浏览器/Playwright 打开预览时图片必裂——这是预期行为，不代表草稿坏了。**预览排版要用本地路径版 HTML 截图**，不要用回读版。
+- **外链/他号 mmbiz 图必须转存本账号（2026-09-21 实战确认）**：素材归属校验会把非本账号的图片 URL 在手机端拦掉（桌面预览正常）。转载稿的图不能直接复用原号图链，逐张走步骤 2 换成本账号 mmbiz URL。
 
 ---
 
@@ -177,6 +201,7 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 | 48001 | api unauthorized / 无此接口权限 | 个别个人号直连会遇到（平台口径不一致）。①后台「接口权限」确认草稿/素材项；②改走第三方平台授权 authorizer_access_token；③后台反馈申诉。不代表所有个人号都不能用 |
 | 40013 | invalid appid | 检查 AppID |
 | 40125 | invalid appsecret | 检查 AppSecret，必要时后台重置 |
+| 40007 | invalid media_id（update 场景） | **别急着怀疑草稿 ID**：get/batchget 正常 + update 全拒 = 封面 `thumb_media_id` 被后台编辑器抹空，按第三节「40007 封面绑定坑」重传永久素材绑回 |
 | 45009 | 超天级调用频率 | 次日恢复，或调 clear_quota |
 | 40005 / 40009 | 图片格式不对 / 尺寸太大 | uploadimg 只收 jpg/png 且 <1MB |
 | 53404~53406 | 带货/商品相关 | 与图文上传无关，检查是否误传 product_info |
