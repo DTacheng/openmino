@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 0.8.0 (2026-09-28)
+
+**新增两坑（2026-09-21 陈律政府采购 skill 转载稿实战，阿成 2026-09-28 拍板进 skill）：手机端表格图小色块 + draft/update 40007 封面绑定。**
+
+- 【坑 a → SKILL.md「4. 图片」+ html-paste-whitelist.md 新小节 + pre-paste-checklist.md D 节与 lint 伪代码】**表格内的 `<img>` 必须带 HTML `width` 属性**——微信手机客户端不认表格内图的 CSS 宽度，`style="width:160px"` 手机端渲染成比一个字还小的色块；桌面编辑器与本地 Playwright 375px 视口全部正常，**浏览器无法复现、headless 验证不设防**。section 普通流内的图不受影响。规范写法 CSS 与 HTML 属性双写：`<img style="width:160px;height:auto;display:inline-block;border:0;" width="160">`
+- 【坑 b → draft-api-upload.md 第三节新小节 + 错误码表 40007 行 + SKILL.md 迭代块】**draft/update 全拒 40007 invalid media_id 而 get/batchget 正常 = 封面 `thumb_media_id` 被后台编辑器抹空**——后台动封面并保存后，新编辑器把封面存成 crop 引用（crop_percent_list + thumb_url），thumb_media_id 变空串，update 校验封面合法性即拒，报错文案误导。修复四步：thumb_url 下载原图 → material/add_material 重传永久素材 → update 带新 media_id → 回读核验。判别实验（API 造测试草稿→后台打开保存→update 仍 ok）证伪"后台保存即锁"；代价=封面裁剪参数丢失需后台重裁，后台再动封面可能再锁
+- 【draft-api-upload.md 第三节补】①回读核验按特征比对别全等比对（服务端规范化三条：URL `/0`→`/640`、`<p style="text-align:center">`→`<section nodeleaf>`、空摘要补前 54 字）；②外链/他号 mmbiz 图未转存本账号会被手机端拦（素材归属校验），转载稿图片必须逐张换本账号 URL
+- 【影响面】纯文档/规则层，无脚本改动（0.7.0 的脚本改动 2026-09-02 当天已同步 GitHub）。同日同步 GitHub `DTacheng/openmino`：远端 0.7.0 → 0.8.0，SKILL.md + CHANGELOG.md + references/ 3 文件共 5 文件；工作区根 CHANGELOG 恢复登记（含 0.7.0 补记）。
+
 ## 0.7.0 (2026-09-02)
 
 **把"同一草稿上迭代"从人工纪律升级为脚本强制：三道安全闸防重推覆盖后台手动编辑。**
