@@ -2,7 +2,7 @@
 name: wechat-article-layout-pitfalls
 description: 微信公众号推文 HTML/SVG 排版避坑速查 + 草稿箱一键上传。当用户要写公众号推文、生成 HTML 排版、嵌入 SVG 插图、从已发布文章复用素材、或想通过 API 一键上传到公众号草稿箱时使用——确保 HTML 粘贴进 mp.weixin.qq.com 编辑器后样式不丢、SVG 动画不丢、正文左右对齐、图片能带得过去。覆盖 ProseMirror 编辑器的粘贴白名单、SVG/SMIL 兼容性、base64 图片要求、二次复用陷阱、以及 draft/add 草稿接口的配置与账号门槛。
 author: 常成（律川 Planet）
-version: "0.7.0"
+version: "0.8.0"
 license: CC BY-NC 4.0
 ---
 
@@ -52,6 +52,7 @@ license: CC BY-NC 4.0
 - ✅ 走 `draft/get` 拉回线上当前内容 → 在拉回的 HTML 上**外科手术式**只改目标元素 → `draft/update` 写回同一 media_id → 再 `draft/get` 回读核验。脚本用 `--update-media-id <id>`
 - ⚠️ **后台编辑器拖图坑**：用户在网页版编辑器拖动图片调位置时，编辑器会把图片副本嵌进段落文字里、并把原文从中间截断吃掉——症状是"图一张不少，但顺序乱、文字缺段"。诊断靠 draft/get 拉回后按顺序 dump 元素（p/img/table）和用户截图对位；修法是删掉嵌在文字里的重复 `<img>`、补回被吃掉的文字。详见 `references/draft-api-upload.md` 第三节
 - ⚠️ draft/get 两个解析坑：响应可能非 UTF-8（用 `resp.apparent_encoding` 解码）；图片 URL 在 `data-src`，`src` 为空
+- ⚠️ **draft/update 全拒 `40007 invalid media_id` 而 get/batchget 正常（2026-09-21 实战新增）**：先查封面 `thumb_media_id` 是否被后台编辑器抹空（后台动过封面并保存，会把封面存成 crop 引用、thumb_media_id 变空串）——报错文案有误导，不是草稿 ID 无效。修复四步见 `references/draft-api-upload.md` 第三节「40007 封面绑定坑」
 
 **改稿红线自动化（0.7.0 新增，防"重推覆盖后台手动编辑"事故）：** 脚本现在对已推送草稿做了三道自动安全闸，主观上你仍然可以"外科手术式"改，但脚本会兜底防手滑——不要把本地源改完后再**裸 `add` 全量重推**（会把后台手动改过的头图/标题/摘要/文字全部删掉且不恢复）。正确姿势：
 
@@ -109,6 +110,7 @@ license: CC BY-NC 4.0
 - ❌ 本地路径 `<img src="./xxx.png">` 粘贴进编辑器后立刻失效
 - ❌ 外链 `<img src="https://...">` 微信会拒抓非白名单域名
 - ❌ `<img>` 上加 `box-shadow` 可能让整个 img 标签被丢——保持 img 的 style 干净（display/width/height/border 就够了）
+- ⚠️ **表格内的 `<img>` 必须带 HTML `width` 属性（2026-09-21 实战新增）**——微信手机客户端对表格内图片不认 CSS 宽度，只写 `style="width:160px"` 的图在手机端渲染成比一个字还小的色块。桌面编辑器、本地 Playwright 375px 视口实测全部正常——**客户端私有渲染逻辑无法用浏览器复现，headless 验证不设防**。section 普通流内的图不受影响（CSS 宽度认）。规范小图写法（CSS 与 HTML 属性双写）：`<img style="width:160px;height:auto;display:inline-block;border:0;" width="160">`
 - ✅ **唯一可靠路径：`<img src="data:image/png;base64,...">`** 或 `data:image/jpeg;base64,...`
 - ⚠️ **实测安全线：base64 编码后 ≤135KB**（对应原图 ~100KB JPEG）——>150KB base64 在粘贴时常被静默吃掉。**注意此限只针对手动粘贴链路**；走草稿 API 时图片经 `uploadimg` 换 mmbiz URL，上限是原图 1MB——头图等要清晰的图按 1MB 准备即可，别按 135KB 压（会糊，2026-08-14 实战教训）
 - ⚠️ 大图先用 PIL/Sharp 缩到 800px 宽再编码，肉眼差异极小但 base64 减半
@@ -134,4 +136,4 @@ license: CC BY-NC 4.0
 
 ## 致谢
 
-SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。0.3.0 回填的 HTML 层细节坑（CSS width 手机端塌缩 / bgcolor 双保险 / 进度条 td 色块 / 同色段落不套 table / 卡片与正文对齐 / 列表独立 p / 伪元素禁用）来自 2026-04 法律元力 / Lawvable / MyAgents 系列 13 篇推文的早期实战沉淀。0.5.0 新增的草稿迭代链路（draft/get + draft/update 同一草稿外科手术）与后台编辑器拖图坑（拖图产生副本嵌进文字、吃掉原文）来自 2026-08-14 元典开放平台 DeepSeek Harness 插件稿实战。0.5.1 新增：外层 section 缩进由 24px 改为 8px（阿成实战反馈"缩进太多、文章太窄"）、标题 32 字符硬截断与回读全等校验、draft/add 服务端清洗文档级标签的实证、mmbiz 防盗链导致本地预览裂图、草稿版本清理链路（batchget/delete）——来自 2026-08-14 元典证券合规 MCP 稿实战。0.6.0 作废"`<section>` 会剥底色/左竖条"旧结论、白名单补 `border-image`/`box-shadow`/`linear-gradient on section` 三条——来自 2026-08-14 律川 Planet 账号真机双层实测（对戴桁宇《公众号排版组件库》争议元素逐项验证），并配套新增 `wechat-visual-style` 官微视觉组件库 skill。0.6.1 移除 `upload_to_draft.py` 自设的 20,000 字符正文校验（只保留微信官方 1MB 体积上限）——2026-08-20 刑事辩护全流程 Pro 版实测 38,102 字符正文 draft/add 照收、回读完整，证明字符线是脚本自设而非微信政策（阿成 2026-08-20 拍板放宽）。0.7.0 把"同一草稿上迭代"从人工纪律升级为**脚本强制**：新增三道安全闸（台账加锁拒绝重复裸 add ／更新前自动备份到 draft-backups/ ／sha1 基线检测后台人工编辑、不一致默认拒绝、需 --force），增量更新时未指定字段沿用手稿当前值——源于 2026-09-02 误用 add+delete 重推覆盖运营者在后台的手动编辑事故（已不可恢复），阿成要求任何已推送草稿必须增量更新。
+SVG 避坑规则核心吸收自杨卫薪律师 `svg-article-illustrator`（https://github.com/cat-xierluo/legal-skills，MIT License）。HTML/CSS 兼容性结论来自 2026-05-08 公众号 ProseMirror 编辑器粘贴实测和 2026-05-26 SVG 完整链路实测。0.2.0 新增的 4 个坑（figure / border 属性失效 / 嵌套 table 等宽 / body bg 不均）来自 2026-05-27 律川 Planet「钻石型团队」实战发稿。0.3.0 回填的 HTML 层细节坑（CSS width 手机端塌缩 / bgcolor 双保险 / 进度条 td 色块 / 同色段落不套 table / 卡片与正文对齐 / 列表独立 p / 伪元素禁用）来自 2026-04 法律元力 / Lawvable / MyAgents 系列 13 篇推文的早期实战沉淀。0.5.0 新增的草稿迭代链路（draft/get + draft/update 同一草稿外科手术）与后台编辑器拖图坑（拖图产生副本嵌进文字、吃掉原文）来自 2026-08-14 元典开放平台 DeepSeek Harness 插件稿实战。0.5.1 新增：外层 section 缩进由 24px 改为 8px（阿成实战反馈"缩进太多、文章太窄"）、标题 32 字符硬截断与回读全等校验、draft/add 服务端清洗文档级标签的实证、mmbiz 防盗链导致本地预览裂图、草稿版本清理链路（batchget/delete）——来自 2026-08-14 元典证券合规 MCP 稿实战。0.6.0 作废"`<section>` 会剥底色/左竖条"旧结论、白名单补 `border-image`/`box-shadow`/`linear-gradient on section` 三条——来自 2026-08-14 律川 Planet 账号真机双层实测（对戴桁宇《公众号排版组件库》争议元素逐项验证），并配套新增 `wechat-visual-style` 官微视觉组件库 skill。0.6.1 移除 `upload_to_draft.py` 自设的 20,000 字符正文校验（只保留微信官方 1MB 体积上限）——2026-08-20 刑事辩护全流程 Pro 版实测 38,102 字符正文 draft/add 照收、回读完整，证明字符线是脚本自设而非微信政策（阿成 2026-08-20 拍板放宽）。0.7.0 把"同一草稿上迭代"从人工纪律升级为**脚本强制**：新增三道安全闸（台账加锁拒绝重复裸 add ／更新前自动备份到 draft-backups/ ／sha1 基线检测后台人工编辑、不一致默认拒绝、需 --force），增量更新时未指定字段沿用手稿当前值——源于 2026-09-02 误用 add+delete 重推覆盖运营者在后台的手动编辑事故（已不可恢复），阿成要求任何已推送草稿必须增量更新。0.8.0 新增两坑：表格内图片必须带 HTML `width` 属性（手机客户端不认表格内图 CSS 宽度，手机端渲染成小色块；桌面端与 headless 浏览器均复现不了）与 draft/update 40007 封面绑定坑（后台编辑器动封面抹空 thumb_media_id → 重传永久素材绑回解锁，报错文案"invalid media_id"有误导）——来自 2026-09-21 陈律政府采购 skill 转载稿实战。
