@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 0.8.4 (2026-11-26)
+
+**台账 key 由"源文件名"改为"源文件名 + 标题"，修复同名文件互相误判（2026-11-20 实战踩坑的根治，阿成 2026-11-26 拍板）。**
+
+- 【问题】`upload_to_draft.py` 的 `.wx_draft_manifest.json` 只按 `source.name` 做 key。不同文章若都叫 `article.html`，第二篇会被误判"已推送过"，报改稿红线并给出**上一篇的 media_id**——既拦了新文章，又可能把内容推到错误的草稿上。
+- 【修复】新增 `_manifest_key(source_name, title)` → `article.html::标题`。加锁判定、基线检测、update 默认 media_id 全部随之生效。同一篇改标题重推会被视为新篇（符合预期：改标题本来就是另一篇草稿）。
+- 【老台账迁移】`_migrate_manifest()` 在 `_load_manifest()` 里自动跑：无 `::` 的老条目转存为 `_legacy::<原key>`，**只存档、不参与加锁与基线判定**（宁可放行一次让脚本走"新增"，也不要错误拦截新文章）；迁移前备份为 `.wx_draft_manifest.json.bak-legacy-<时间戳>`；迁移幂等，二次调用无变化。
+- 【验收】单测四项全过：同名不同标题 key 相异 / 同文件同标题 key 相同 / 老条目正确转 `_legacy` 且 media_id 保留 / 二次迁移无变化。
+- 【影响面】**有脚本改动**（`scripts/upload_to_draft.py` + `scripts/README.md`）。首次运行会打印迁移提示并产出台账备份文件。
+
 ## 0.8.3 (2026-11-26)
 
 **补入三条工程结论（molt 2026-11-23 登记的交接项，2026-11-26 落地）。**
