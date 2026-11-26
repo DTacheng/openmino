@@ -400,9 +400,23 @@ def update_draft(token: str, media_id: str, index: int, article: dict) -> None:
 def _load_manifest() -> dict:
     if MANIFEST.exists():
         try:
-            return json.loads(MANIFEST.read_text(encoding="utf-8"))
+            m = json.loads(MANIFEST.read_text(encoding="utf-8"))
         except Exception:
-            pass
+            return {}
+        m, migrated = _migrate_manifest(m)
+        if migrated:
+            # 迁移前先备份老台账，人工版永不丢
+            bak = MANIFEST.with_name(f"{MANIFEST.name}.bak-legacy-{time.strftime('%Y%m%d-%H%M%S')}")
+            try:
+                bak.write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+            try:
+                _save_manifest(m)
+            except Exception:
+                pass
+            print(f"· 台账已迁移：老条目（仅文件名 key）转为 _legacy 存档，备份 → {bak.name}")
+        return m
     return {}
 
 
@@ -425,6 +439,38 @@ def _backup_draft(media_id: str, news_item: dict, tag: str) -> Path:
     html_p = base.with_suffix(".html")
     html_p.write_text(news_item.get("content", ""), encoding="utf-8")
     return html_p
+
+
+def _manifest_key(source_name: str, title: str) -> str:
+    """台账 key = 源文件名 + 标题。
+
+    历史教训（2026-11-20）：早期只用源文件名做 key，多篇文章若都叫 article.html，
+    第二篇会被误判为"已推送过"并报改稿红线、给出上一篇的 media_id。
+    加标题后同名文件的不同文章自然区分开；同一篇改标题重推会被视为新篇（符合预期，
+    因为改了标题本来就是另一篇草稿）。
+    """
+    return f"{source_name}::{title.strip()[:32]}"
+
+
+def _migrate_manifest(m: dict) -> tuple[dict, bool]:
+    """把老台账（key = 纯文件名）迁移到新 key（文件名::标题）。
+
+    老条目没有标题信息，只能原样保留在 `_legacy` 命名空间下供人工核对，
+    不再参与加锁/基线判定——宁可放行一次让脚本走"新增"，也不要错误拦截新文章。
+    返回 (新台账, 是否发生迁移)。
+    """
+    changed = False
+    for k in list(m.keys()):
+        if "::" in k:
+            continue
+        entry = m[k]
+        legacy_key = f"_legacy::{k}"
+        if legacy_key not in m:
+            m[legacy_key] = {**entry, "legacy_note":
+                             "老版台账（仅按文件名 key），无法确定对应哪一篇；仅存档不参与判定"}
+        del m[k]
+        changed = True
+    return m, changed
 
 
 def _record_baseline(key: str, media_id: str, token: str) -> None:
@@ -494,8 +540,8 @@ def main() -> int:
     if not source.is_file():
         raise WeChatError(f"找不到源文件：{source}")
 
-    # 台账 key：以源文件名锚定（同一篇稿改版也用同一文件名，便于记住 media_id）
-    key = source.name
+    # 台账 key：源文件名 + 标题（同名 article.html 的不同文章不会互相误判）
+    key = _manifest_key(source.name, article["title"])
     manifest = _load_manifest()
 
     suffix = source.suffix.lower()
