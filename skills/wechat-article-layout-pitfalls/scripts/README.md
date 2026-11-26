@@ -77,6 +77,8 @@ python upload_to_draft.py article.html --update-media-id <media_id>
 2. 更新前自动备份草稿箱当前内容到 `draft-backups/`；
 3. 检测到草稿被后台人工改过 → 默认拒绝（exit 2），须先把人工版 diff 出来合并进本地源，再带 `--force` 重推。
 
+**台账 key = 源文件名 + 标题**（`article.html::标题`）。早期只用文件名做 key，多篇文章都叫 `article.html` 时会互相误判，第二篇被错误拦截并给出上一篇的 media_id（2026-11-20 实战踩到）。老格式台账在首次运行时自动迁移：老条目转存到 `_legacy::<文件名>`，**只存档、不参与加锁与基线判定**，迁移前先备份成 `.wx_draft_manifest.json.bak-legacy-<时间戳>`。注意：改了标题再推会被当作新篇（符合预期——改标题本来就是另一篇草稿）。
+
 增量更新时不传 `--title/--author/--digest/--cover/--source-url` 会沿用草稿箱当前值（后台改过的标题/摘要/封面天然保留）。不确定草稿状态时，先 `--update-media-id <id> --export-current`（只备份+登记基线、不推送）。
 
 ## 常见错误码
