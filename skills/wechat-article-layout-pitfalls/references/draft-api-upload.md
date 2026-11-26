@@ -137,6 +137,38 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 - **图片在 `data-src`**：回读回来的 content 里，`<img>` 的 URL 在 `data-src` 属性（mmbiz URL 带 `/640?from=appmsg`），`src` 为空。解析/比对时读 `data-src`；draft/update 把 data-src 格式原样写回是可用的。
 - **校验顺序**：含 base64 的 HTML 会先撑爆 1MB 体积校验——**必须先换图（base64→mmbiz）再校验 content 体积**，顺序反了会误报。
 
+### media_id 会失效：按标题重新定位 + 残稿五特征判定（2026-10-26 实测，两次实例）
+
+**media_id 不是草稿的稳定身份。** 后台人工编辑/群发操作会替换 media_id、清空封面绑定、把正文换成残片。`draft/get` 报 40007 时按下面顺序走，别猜：
+
+1. **先跑 `draft/batchget`（offset 0/20/40）按标题全量找**，确认草稿是否还在、ID 是否被换；
+2. 找到同题条目后 `draft/get` 核对**正文字符数 + `<img>` 数 + 作者/摘要/thumb_media_id**，与本地 `article.html` 基线比对；
+3. 只在确认是同一份且内容完整时才 `--update-media-id` 续改；**内容是残片就视为新稿重推，不要往残片上缝**。
+
+**残稿五特征**——同时命中即判"已群发/已被后台处理"，不要再当待改草稿：
+
+| # | 特征 |
+|---|---|
+| ① | media_id 换新（旧 ID 报 40007） |
+| ② | 标题被截断或被后台改题 |
+| ③ | 正文只剩 ~400 字纯文本 |
+| ④ | 0 图 |
+| ⑤ | 无封面，update_time 为推送当天傍晚/深夜 |
+
+单特征不立案。**"离箱 + 无残稿"判状态不明**（既不立案群发也不立案废弃），需向运营者确认。
+
+### 台账撞名：同目录多篇文章都用 article.html 会误判（2026-11-20 实战新增）
+
+`upload_to_draft.py` 的台账（`.wx_draft_manifest.json`）**只按源文件名 key**。不同文章若都叫 `article.html`，第二篇会被误判为"已推送过"并报改稿红线、给出上一篇的 media_id。
+
+处置：先 `draft/batchget` 确认草稿箱无同题草稿、旧 ID 已失效，再从台账删过期条目（**删前备份**）后按新稿推。根治方向是台账改按内容 hash key（尚未实施）。
+
+### 后台预览会改内容：加 `&nbsp;` + 抹空封面（2026-11-20 实战新增）
+
+**后台打开草稿、哪怕只是预览保存**，都会给正文加 `&nbsp;` 并把 `thumb_media_id` 抹空——与「40007 封面绑定坑」同族。
+
+被"人工修改检测"闸拦住时：拉回远端 → 文本归一 `&nbsp;` 后再 diff，**无实质改动即可 `--force` 更新**；但 update 时**必须重传封面绑回**（不传 `--cover` 会沿用被抹空的空值）。
+
 ### 后台手动编辑的大坑：拖图会产生副本、吃掉文字
 
 用户在网页版编辑器里**拖动图片调位置**时，编辑器可能把图片副本嵌进段落文字的 `<span>` 里，并把文字从中间截断吃掉。症状极具迷惑性：**图一张不少，但顺序错乱、文字缺段**（例如图注被截成"密钥不写入项[图]通过"，整句"插件以 .tgz 包分发并带 SHA-256 校验…"消失）。
@@ -167,6 +199,16 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 - mmbiz URL 尺寸参数 `/0` 会被改成 `/640`；
 - `<p style="text-align:center">` 会被后台保存规范化成 `<section nodeleaf>`；
 - 空摘要（digest）自动补正文前 54 字。
+
+### GIF 动画：不能走 uploadimg，要走 material/add_material（2026-11-20 实战新增）
+
+`media/uploadimg` 只收 JPG/PNG，且 `upload_to_draft.py` 会把任何输入图重编码成静态 JPEG——**GIF 走这条路动画必死**。正确链路：
+
+1. GIF 走 `material/add_material`，`type=image`（支持 GIF，上限 10MB），拿到返回的 `url`（`mmbiz_gif` 域名）；
+2. HTML 里以 **http(s) src** 直接内嵌 `<img src="http://mmbiz.qpic.cn/...gif">`——`upload_to_draft.py` 的换图步骤对 http src 天然跳过，不会重编码；
+3. `draft/add` 后服务端规范化为标准正文形态：`data-src` + `https` + `/640?wx_fmt=gif`，**动画保留**。
+
+回读按上述特征核验，别指望原样保留。实测参数：750×287、2.7MB、56 帧，真机效果已确认。
 
 ### 草稿版本清理：batchget + delete（2026-08-14 实战新增）
 
@@ -201,7 +243,7 @@ Body(JSON): {"media_id":"...", "index":0, "articles":{...}}
 | 48001 | api unauthorized / 无此接口权限 | 个别个人号直连会遇到（平台口径不一致）。①后台「接口权限」确认草稿/素材项；②改走第三方平台授权 authorizer_access_token；③后台反馈申诉。不代表所有个人号都不能用 |
 | 40013 | invalid appid | 检查 AppID |
 | 40125 | invalid appsecret | 检查 AppSecret，必要时后台重置 |
-| 40007 | invalid media_id（update 场景） | **别急着怀疑草稿 ID**：get/batchget 正常 + update 全拒 = 封面 `thumb_media_id` 被后台编辑器抹空，按第三节「40007 封面绑定坑」重传永久素材绑回 |
+| 40007 | invalid media_id（需区分两种成因） | **别急着怀疑草稿 ID**。按 get 的结果分流：①**get 正常、只有 update 被拒** = 封面 `thumb_media_id` 被后台编辑器抹空 → 按第三节「40007 封面绑定坑」重传永久素材绑回；②**get 也报 40007** = 该 media_id 已失效（后台群发/人工操作换号）→ 走 `draft/batchget` 按标题重新定位，再按「残稿五特征」判定是新版还是残片 |
 | 45009 | 超天级调用频率 | 次日恢复，或调 clear_quota |
 | 40005 / 40009 | 图片格式不对 / 尺寸太大 | uploadimg 只收 jpg/png 且 <1MB |
 | 53404~53406 | 带货/商品相关 | 与图文上传无关，检查是否误传 product_info |
