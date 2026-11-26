@@ -47,6 +47,9 @@
 - [ ] **列表没有在单 `<td>` 里用 `<br/><br/>` 分隔 bullet** —— WeChat 会把首段单独套 `<p>`，导致第一条标号掉行错位
   - 检查方法：grep 列表型 `<td>` 内是否出现 `<br/><br/>` / `<br><br>`
   - 替换方案：每条 bullet 用独立 `<p>`（前面 `margin:0 0 12px 0`、末条 `margin:0`）
+- [ ] **引用卡/金句卡的出处标注（`——`+来源）独立 `<p>` 成行** —— 跟在引文后自然折行会把出处拦腰折断（"——哈维官 / 方博客"），移动端不整齐（2026-11-26 哈维图谱稿实战）
+  - 检查方法：grep 卡片内同时含引文与 `——` 的 `<p>`
+  - 替换方案：引文一个 `<p>`、出处单独一个 `<p>`（末条 `margin:0`，居中卡片 `text-align:center`）
 - [ ] **没有 `position: absolute/fixed`** —— grep `position:\s*(absolute|fixed)`
 - [ ] **没有 `display: flex/grid`** —— grep `display:\s*(flex|grid)`
 - [ ] **没有 CSS 变量** —— grep `var\(--`，全部要展开成实际值
